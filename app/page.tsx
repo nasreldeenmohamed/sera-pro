@@ -33,6 +33,7 @@ export default function Home() {
               )}
             </p>
             <div className="flex flex-col sm:flex-row gap-3">
+              {/* Direct access to CV builder - no authentication required (guest mode) */}
               <Button asChild className="text-white" style={{ backgroundColor: "#0d47a1" }}>
                 <Link href="/create-cv">{t("Create Free CV", "أنشئ سيرة مجانية")}</Link>
               </Button>
@@ -40,6 +41,12 @@ export default function Home() {
                 <Link href="/pricing">{t("See Pricing", "الأسعار")}</Link>
               </Button>
             </div>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-2">
+              {t(
+                "Start building instantly — sign in only when you're ready to save or download",
+                "ابدأ البناء فورًا — سجّل الدخول فقط عندما تكون جاهزًا للحفظ أو التنزيل"
+              )}
+            </p>
             <ul className="mt-4 grid grid-cols-1 gap-2 text-sm text-zinc-700 dark:text-zinc-300 sm:grid-cols-2">
               {/* Key benefits bullets */}
               {[t("AI suggestions", "اقتراحات بالذكاء الاصطناعي"), t("ATS-optimized", "متوافق مع أنظمة التتبع"), t("Arabic & English", "عربي وإنجليزي"), t("One‑click PDF", "تصدير PDF بنقرة")].map((item) => (

@@ -1,8 +1,8 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { signUpWithEmailPassword, signInWithGoogle } from "@/firebase/auth";
+import { signUpWithEmailPassword, signInWithGoogle, getGoogleRedirectResult } from "@/firebase/auth";
 import { saveUserProfile } from "@/firebase/firestore";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
@@ -11,14 +11,36 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { SiteLayout } from "@/components/layout/SiteLayout";
 import { useLocale } from "@/lib/locale-context";
+import { useAuth } from "@/lib/auth-context";
 
 // Registration page using Firebase Auth (email/password + Google)
 // - Uses shared SiteLayout for consistent header/footer
 // - Bilingual UI with RTL support via global locale
 // - Client-side validation shows realtime errors
+/**
+ * Register Page - Supports Redirect Flow
+ * 
+ * Handles authentication redirects from protected actions (e.g., CV builder).
+ * After successful registration, redirects back to the intended page and executes
+ * the pending action (via sessionStorage callback mechanism).
+ */
 export default function RegisterPage() {
   const router = useRouter();
   const { isAr, t } = useLocale();
+  const { user, loading: authLoading } = useAuth();
+
+  // Get redirect URL and action from query params
+  const [redirectUrl, setRedirectUrl] = useState<string | null>(null);
+  const [action, setAction] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Check URL params for redirect info
+    const params = new URLSearchParams(window.location.search);
+    const redirect = params.get("redirect");
+    const actionParam = params.get("action");
+    if (redirect) setRedirectUrl(redirect);
+    if (actionParam) setAction(actionParam);
+  }, []);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,11 +68,117 @@ export default function RegisterPage() {
       "auth/email-already-in-use": ["Email already in use.", "البريد الإلكتروني مستخدم بالفعل."],
       "auth/invalid-email": ["Invalid email.", "بريد إلكتروني غير صالح."],
       "auth/weak-password": ["Weak password.", "كلمة المرور ضعيفة."],
+      "auth/redirect-cancelled-by-user": ["Sign-in was cancelled.", "تم إلغاء تسجيل الدخول."],
+      "auth/redirect-operation-pending": ["A sign-in operation is already in progress.", "عملية تسجيل دخول قيد التنفيذ بالفعل."],
+      "auth/account-exists-with-different-credential": ["An account already exists with this email.", "يوجد حساب بالفعل بهذا البريد الإلكتروني."],
       default: ["Something went wrong.", "حدث خطأ ما."],
     };
     const [en, ar] = map[code] || map.default;
     return isAr ? ar : en;
   }
+
+  // Redirect after authentication
+  useEffect(() => {
+    if (!authLoading && user) {
+      // Store callback info for post-auth action execution
+      if (action) {
+        sessionStorage.setItem("authCallback", JSON.stringify({ action, callback: "pending" }));
+      }
+
+      // Redirect to intended page or dashboard
+      const targetUrl = redirectUrl || "/dashboard";
+      console.log("[Register] User authenticated, redirecting to:", targetUrl);
+      router.replace(targetUrl);
+    }
+  }, [user, authLoading, router, redirectUrl, action]);
+
+  // Check for Google redirect result when page loads (fallback if AuthProvider doesn't handle it)
+  // This handles the redirect callback after user signs in with Google
+  // Important: getRedirectResult can only be called once per redirect, and only when there's actually a redirect result
+  // NOTE: AuthProvider also handles redirect results globally, so this is a fallback
+  useEffect(() => {
+    let mounted = true;
+    
+    async function handleRedirectResult() {
+      // Small delay to ensure Firebase is fully initialized
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+      if (!mounted) return;
+      
+      setLoading(true);
+      console.log("[Register] Checking for Google redirect result...");
+      console.log("[Register] Current URL:", window.location.href);
+      console.log("[Register] URL search params:", window.location.search);
+      
+      try {
+        const result = await getGoogleRedirectResult();
+        
+        if (!mounted) return;
+        
+        if (result && result.user) {
+          console.log("[Register] ✅ Google sign-up successful!", {
+            uid: result.user.uid,
+            email: result.user.email,
+            displayName: result.user.displayName,
+          });
+          
+          // User signed in via Google redirect
+          const user = result.user;
+          
+          // Create or update user profile in Firestore
+          try {
+            console.log("[Register] Saving user profile to Firestore...");
+            await saveUserProfile(user.uid, {
+              name: user.displayName || user.email?.split("@")[0] || "User",
+              phone: undefined, // Google doesn't provide phone number
+              email: user.email || "",
+            });
+            console.log("[Register] ✅ Profile saved successfully");
+            
+            // Store callback info if action was specified
+            if (action) {
+              sessionStorage.setItem("authCallback", JSON.stringify({ action, callback: "pending" }));
+            }
+            
+            // Redirect to intended page or dashboard
+            const targetUrl = redirectUrl || "/dashboard";
+            console.log("[Register] Redirecting to:", targetUrl);
+            router.replace(targetUrl);
+          } catch (profileError: any) {
+            console.error("[Register] ❌ Failed to save profile:", profileError);
+            console.error("[Register] Profile error details:", {
+              code: profileError?.code,
+              message: profileError?.message,
+              stack: profileError?.stack,
+            });
+            setError(t("Failed to save profile. Please try again.", "فشل حفظ الملف الشخصي. يرجى المحاولة مرة أخرى."));
+            setLoading(false);
+            return;
+          }
+        } else {
+          console.log("[Register] ℹ️ No redirect result (normal if not returning from Google sign-in)");
+          setLoading(false);
+        }
+      } catch (err: any) {
+        if (!mounted) return;
+        console.error("[Register] ❌ Google redirect error:", err);
+        console.error("[Register] Error details:", {
+          code: err?.code,
+          message: err?.message,
+          stack: err?.stack,
+        });
+        setError(mapFirebaseError(err?.code || ""));
+        setLoading(false);
+      }
+    }
+    
+    handleRedirectResult();
+    
+    return () => {
+      mounted = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -71,7 +199,14 @@ export default function RegisterPage() {
         email,
       });
       
-      router.replace("/dashboard");
+      // Store callback info if action was specified
+      if (action) {
+        sessionStorage.setItem("authCallback", JSON.stringify({ action, callback: "pending" }));
+      }
+      
+      // Redirect to intended page or dashboard
+      const targetUrl = redirectUrl || "/dashboard";
+      router.replace(targetUrl);
     } catch (err: any) {
       setError(mapFirebaseError(err?.code || ""));
     } finally {
@@ -79,24 +214,40 @@ export default function RegisterPage() {
     }
   }
 
-  async function handleGoogle() {
+  async function handleGoogle(e?: React.MouseEvent) {
+    e?.preventDefault?.();
+    e?.stopPropagation?.();
+    
+    console.log("[Register] 🔵 handleGoogle called");
+    console.log("[Register] Current loading state:", loading);
+    
     setError(null);
     setLoading(true);
+    
     try {
-      const result = await signInWithGoogle();
-      const user = result.user;
+      console.log("[Register] 🚀 Starting Google sign-in redirect...");
+      console.log("[Register] Current page URL:", window.location.href);
+      console.log("[Register] Firebase configured:", typeof window !== "undefined" ? "yes (browser)" : "no (server)");
       
-      // Save profile data from Google account (create if doesn't exist)
-      await saveUserProfile(user.uid, {
-        name: user.displayName || user.email?.split("@")[0] || "User",
-        phone: undefined,
-        email: user.email || "",
-      });
-      
-      router.replace("/dashboard");
+      // Sign in with Google redirect (redirects to Google, then back to this page)
+      // After redirect, useEffect will handle the result via getGoogleRedirectResult()
+      await signInWithGoogle();
+      // Note: signInWithRedirect doesn't return immediately - the page will redirect
+      // The useEffect hook will handle the redirect result when the page loads again
+      console.log("[Register] ✅ Redirect initiated (page will redirect to Google)");
+      // Note: After signInWithRedirect completes, the browser will navigate away
+      // so we won't see logs after this point until the redirect returns
     } catch (err: any) {
+      console.error("[Register] ❌ Failed to initiate Google redirect:", err);
+      console.error("[Register] Error type:", typeof err);
+      console.error("[Register] Error details:", {
+        code: err?.code,
+        message: err?.message,
+        stack: err?.stack,
+        name: err?.name,
+      });
+      // Handle Firebase auth errors
       setError(mapFirebaseError(err?.code || ""));
-    } finally {
       setLoading(false);
     }
   }
@@ -182,7 +333,18 @@ export default function RegisterPage() {
           </form>
         </Form>
         <div className="mt-4">
-          <Button variant="secondary" className="w-full" onClick={handleGoogle}>{t("Continue with Google", "المتابعة مع جوجل")}</Button>
+          <Button 
+            variant="secondary" 
+            className="w-full" 
+            onClick={(e) => {
+              console.log("[Register] 🔘 Google button clicked!");
+              handleGoogle(e);
+            }}
+            disabled={loading}
+            type="button"
+          >
+            {loading ? t("Please wait...", "يرجى الانتظار...") : t("Continue with Google", "المتابعة مع جوجل")}
+          </Button>
         </div>
       </section>
     </SiteLayout>

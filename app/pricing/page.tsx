@@ -1,45 +1,245 @@
 "use client";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { PurchaseButton } from "@/components/payments/PurchaseButtons";
 import { SiteLayout } from "@/components/layout/SiteLayout";
 import { useLocale } from "@/lib/locale-context";
+import { Check } from "lucide-react";
 
-// EGP subscription plans, ready to connect with Kashier checkout
+// Pricing page matching the landing page pricing section
+// Shows all 4 plans: Free, One-Time Purchase, Flex Pack, Annual Pass
 // Uses shared SiteLayout for consistent header/footer
 export default function PricingPage() {
-  const { t } = useLocale();
-  
+  const { isAr, t } = useLocale();
+
   return (
     <SiteLayout>
-      <section className="mx-auto max-w-5xl p-6 sm:p-8 md:p-12">
-        <h1 className="text-2xl font-semibold">Pricing - الأسعار (EGP)</h1>
-        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {[
-            { name: "Starter", price: 99, features: ["1 CV", "Basic templates"] },
-            { name: "Pro", price: 199, features: ["3 CVs", "Pro templates", "Priority AI"] },
-            { name: "Business", price: 399, features: ["Unlimited CVs", "All templates", "Team support"] },
-          ].map((plan) => (
-            <div key={plan.name} className="rounded-lg border p-5">
-              <h2 className="text-lg font-semibold">{plan.name}</h2>
-              <p className="mt-2 text-3xl font-bold">EGP {plan.price}</p>
-              <ul className="mt-4 list-disc pl-5 text-sm text-zinc-600 dark:text-zinc-400">
-                {plan.features.map((f) => (
-                  <li key={f}>{f}</li>
+      <section className="px-4 py-10 sm:px-6 md:px-10">
+        <div className="mx-auto max-w-6xl">
+          {/* Header */}
+          <div className="text-center mb-10">
+            <h1 className="text-3xl sm:text-4xl font-semibold">
+              {t("Pricing Plans", "خطط الأسعار")}
+            </h1>
+            <p className="mt-3 text-base sm:text-lg text-zinc-600 dark:text-zinc-400">
+              {t(
+                "Sera Pro charges per CV or power-user access — affordable for Egypt.",
+                "سيرة برو تُحاسب لكل سيرة أو على وصول للمستخدمين المحترفين — أسعار مناسبة للسوق المحلي."
+              )}
+            </p>
+          </div>
+
+          {/* Pricing Cards Grid */}
+          <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {/* Free Plan */}
+            <div className="rounded-xl border p-6 hover:shadow-md transition-shadow">
+              <h3 className="text-lg font-semibold">{t("Free", "مجانية")}</h3>
+              <p className="mt-1 text-3xl font-bold">EGP 0</p>
+              <ul className="mt-4 space-y-2 text-sm text-zinc-700 dark:text-zinc-300">
+                {[
+                  t("1 basic CV", "سيرة أساسية واحدة"),
+                  t("2 templates", "قالبان"),
+                  t("Watermarked PDF", "ملف PDF بعلامة مائية"),
+                ].map((f) => (
+                  <li key={f} className="flex items-center gap-2">
+                    <Check className="h-4 w-4 flex-shrink-0" style={{ color: "#d4af37" }} />
+                    <span>{f}</span>
+                  </li>
                 ))}
               </ul>
-              {/* Replace with real checkout wiring; keeping legacy link for Starter */}
-              {plan.name === "Starter" ? (
-                <Button asChild className="mt-6 w-full">
-                  <Link href={`/api/payments/kashier/checkout?plan=${plan.name.toLowerCase()}`}>Checkout with Kashier</Link>
-                </Button>
-              ) : plan.name === "Pro" ? (
-                <div className="mt-6"><PurchaseButton product="one_time" /></div>
-              ) : (
-                <div className="mt-6"><PurchaseButton product="annual_pass" /></div>
-              )}
+              <Button
+                asChild
+                className="mt-6 w-full text-white"
+                style={{ backgroundColor: "#0d47a1" }}
+              >
+                <Link href="/create-cv">
+                  {t("Create Free CV", "أنشئ سيرة مجانية")}
+                </Link>
+              </Button>
             </div>
-          ))}
+
+            {/* One-Time Purchase */}
+            <div
+              className="rounded-xl border p-6 ring-1 hover:shadow-md transition-shadow"
+              style={{
+                borderColor: "#d4af37",
+                boxShadow: "0 0 0 1px #d4af37 inset",
+              }}
+            >
+              <div className="flex items-center gap-2 mb-1">
+                <h3 className="text-lg font-semibold">
+                  {t("One-Time Purchase", "شراء لمرة واحدة")}
+                </h3>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200">
+                  {t("Popular", "الأكثر شعبية")}
+                </span>
+              </div>
+              <p className="mt-1 text-3xl font-bold">EGP 49–79</p>
+              <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-1">
+                {t("per CV", "لكل سيرة")}
+              </p>
+              <ul className="mt-4 space-y-2 text-sm text-zinc-700 dark:text-zinc-300">
+                {[
+                  t(
+                    "Per CV, AI‑enhanced, ATS‑optimized",
+                    "لكل سيرة، محسنة بالذكاء الاصطناعي ومتوافقة مع أنظمة التتبع"
+                  ),
+                  t("10+ templates", "أكثر من 10 قوالب"),
+                  t(
+                    "Unlimited edits for 14 days",
+                    "تعديلات غير محدودة لمدة 14 يومًا"
+                  ),
+                  t("No watermark", "بدون علامة مائية"),
+                ].map((f) => (
+                  <li key={f} className="flex items-center gap-2">
+                    <Check className="h-4 w-4 flex-shrink-0" style={{ color: "#d4af37" }} />
+                    <span>{f}</span>
+                  </li>
+                ))}
+              </ul>
+              {/* TODO(payment): At checkout, select 49 or 79 tier based on template group */}
+              <Button
+                asChild
+                className="mt-6 w-full text-white"
+                style={{ backgroundColor: "#0d47a1" }}
+              >
+                <Link href="/api/payments/kashier/checkout?product=one_time">
+                  {t("Buy CV", "شراء سيرة")}
+                </Link>
+              </Button>
+            </div>
+
+            {/* Flex Pack */}
+            <div className="rounded-xl border p-6 hover:shadow-md transition-shadow">
+              <h3 className="text-lg font-semibold">{t("Flex Pack", "باقة مرنة")}</h3>
+              <p className="mt-1 text-3xl font-bold">EGP 149</p>
+              <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-1">
+                {t("6 months validity", "صالح لمدة 6 أشهر")}
+              </p>
+              <ul className="mt-4 space-y-2 text-sm text-zinc-700 dark:text-zinc-300">
+                {[
+                  t("5 CVs credits (wallet)", "رصيد 5 سير (محفظة)"),
+                  t("Valid for 6 months", "صالحة لمدة 6 أشهر"),
+                  t("AI + templates included", "ذكاء اصطناعي + قوالب"),
+                ].map((f) => (
+                  <li key={f} className="flex items-center gap-2">
+                    <Check className="h-4 w-4 flex-shrink-0" style={{ color: "#d4af37" }} />
+                    <span>{f}</span>
+                  </li>
+                ))}
+              </ul>
+              {/* TODO(wallet): Deduct 1 credit per exported CV, show balance in dashboard */}
+              <Button
+                asChild
+                className="mt-6 w-full text-white"
+                style={{ backgroundColor: "#0d47a1" }}
+              >
+                <Link href="/api/payments/kashier/checkout?product=flex_pack">
+                  {t("Get Flex Pack", "شراء الباقة المرنة")}
+                </Link>
+              </Button>
+            </div>
+
+            {/* Annual Pass */}
+            <div className="rounded-xl border p-6 hover:shadow-md transition-shadow">
+              <h3 className="text-lg font-semibold">
+                {t("Annual Pass", "البطاقة السنوية")}
+              </h3>
+              <p className="mt-1 text-3xl font-bold">
+                EGP 299/<span className="text-lg">{t("year", "سنة")}</span>
+              </p>
+              <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-1">
+                {t("Best value", "أفضل قيمة")}
+              </p>
+              <ul className="mt-4 space-y-2 text-sm text-zinc-700 dark:text-zinc-300">
+                {[
+                  t("Unlimited CVs", "سير غير محدودة"),
+                  t(
+                    "Cover letter & LinkedIn tools",
+                    "أدوات خطاب التغطية ولينكدإن"
+                  ),
+                  t(
+                    "Access future features",
+                    "الوصول للميزات المستقبلية"
+                  ),
+                ].map((f) => (
+                  <li key={f} className="flex items-center gap-2">
+                    <Check className="h-4 w-4 flex-shrink-0" style={{ color: "#d4af37" }} />
+                    <span>{f}</span>
+                  </li>
+                ))}
+              </ul>
+              {/* TODO(access): Grant pro scope; renew yearly; show renewal date */}
+              <Button
+                asChild
+                className="mt-6 w-full text-white"
+                style={{ backgroundColor: "#0d47a1" }}
+              >
+                <Link href="/api/payments/kashier/checkout?product=annual_pass">
+                  {t("Get Annual Pass", "الحصول على البطاقة السنوية")}
+                </Link>
+              </Button>
+            </div>
+          </div>
+
+          {/* FAQ / Explanatory text */}
+          <div className="mt-12 rounded-xl border p-6 bg-zinc-50 dark:bg-zinc-900">
+            <h3 className="text-lg font-semibold mb-4">
+              {t("How it works", "كيف يعمل")}
+            </h3>
+            <div className="space-y-3 text-sm text-zinc-700 dark:text-zinc-300">
+              <p>
+                {t(
+                  "Pay per actual CV, or choose a pack/pass for power users. Pricing is optimized for the Egyptian market.",
+                  "ادفع مقابل السيرة الفعلية، أو اختر باقة/بطاقة سنوية للمستخدمين المحترفين. التسعير مناسب للسوق المصري."
+                )}
+              </p>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>
+                  {t(
+                    "One-Time grants 14 days of unlimited edits for that CV.",
+                    "الشراء لمرة واحدة يمنح 14 يومًا من التعديلات غير المحدودة لتلك السيرة."
+                  )}
+                </li>
+                <li>
+                  {t(
+                    "Flex Pack adds a wallet with CV credits you can spend anytime.",
+                    "الباقة المرنة تضيف محفظة برصيد سير يمكنك استخدامه في أي وقت."
+                  )}
+                </li>
+                <li>
+                  {t(
+                    "Annual Pass unlocks pro tools and future features.",
+                    "البطاقة السنوية تفتح أدوات احترافية وميزات مستقبلية."
+                  )}
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          {/* CTA Section */}
+          <div className="mt-10 rounded-2xl border p-8 text-center" style={{ backgroundColor: "#0d47a1" }}>
+            <h3 className="text-xl font-semibold text-white mb-2">
+              {t(
+                "Ready to craft your standout CV?",
+                "جاهز لإنشاء سيرتك المتميزة؟"
+              )}
+            </h3>
+            <p className="text-sm text-white opacity-90 mb-6">
+              {t("Start free, upgrade anytime.", "ابدأ مجانًا ويمكنك الترقية لاحقًا.")}
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <Button
+                asChild
+                className="text-black"
+                style={{ backgroundColor: "#d4af37" }}
+              >
+                <Link href="/create-cv">{t("Start Now", "ابدأ الآن")}</Link>
+              </Button>
+              <Button asChild variant="secondary" className="bg-white text-black hover:bg-zinc-100">
+                <Link href="/auth">{t("Sign In", "تسجيل الدخول")}</Link>
+              </Button>
+            </div>
+          </div>
         </div>
       </section>
     </SiteLayout>

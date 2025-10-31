@@ -6,7 +6,8 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   GoogleAuthProvider,
-  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   sendPasswordResetEmail,
   onAuthStateChanged,
   signOut,
@@ -44,12 +45,80 @@ export async function signUpWithEmailPassword(email: string, password: string) {
   return createUserWithEmailAndPassword(auth, email, password);
 }
 
-// Sign in/up using Google popup (client-only)
+// Sign in/up using Google redirect (client-only)
+// Google authentication is enabled in Firebase Console
+// This function handles both new user registration and existing user sign-in
+// Uses redirect instead of popup to avoid Cross-Origin-Opener-Policy (COOP) issues
+// After redirect, use getGoogleRedirectResult() to get the UserCredential
 export async function signInWithGoogle() {
+  // Only run in browser
+  if (typeof window === "undefined") {
+    throw new Error("signInWithGoogle can only be called in the browser");
+  }
+  
   const auth = initializeFirebaseAuth();
-  if (!auth) throw new Error("Firebase is not configured. Please check your environment variables.");
+  if (!auth) {
+    throw new Error("Firebase is not configured. Please check your environment variables.");
+  }
   const provider = new GoogleAuthProvider();
-  return signInWithPopup(auth, provider);
+  // Optional: Add additional scopes if needed (e.g., profile, email)
+  // provider.addScope('profile');
+  // provider.addScope('email');
+  // Use redirect instead of popup to avoid COOP issues
+  console.log("[Firebase Auth] Initiating Google sign-in redirect...");
+  console.log("[Firebase Auth] Current URL:", window.location.href);
+  await signInWithRedirect(auth, provider);
+  // Note: After this call, the page will redirect to Google's sign-in page
+  // The user will be redirected back to the same page after authentication
+  // Use getGoogleRedirectResult() in a useEffect to handle the result
+}
+
+// Get the result after Google redirect authentication
+// Call this after the page redirects back from Google sign-in
+// Returns UserCredential if successful, null if no redirect result
+export async function getGoogleRedirectResult() {
+  // Only run in browser
+  if (typeof window === "undefined") {
+    console.warn("[Firebase Auth] getGoogleRedirectResult called on server, returning null");
+    return null;
+  }
+  
+  const auth = initializeFirebaseAuth();
+  if (!auth) {
+    console.warn("[Firebase Auth] Auth not initialized, cannot get redirect result");
+    return null;
+  }
+  try {
+    console.log("[Firebase Auth] Calling getRedirectResult...");
+    console.log("[Firebase Auth] Auth instance:", auth ? "initialized" : "null");
+    console.log("[Firebase Auth] Current user before getRedirectResult:", auth.currentUser?.uid || "none");
+    
+    const result = await getRedirectResult(auth);
+    
+    if (result) {
+      console.log("[Firebase Auth] ✅ Redirect result received:", {
+        uid: result.user.uid,
+        email: result.user.email,
+        displayName: result.user.displayName,
+        isNewUser: result.user.metadata.creationTime === result.user.metadata.lastSignInTime,
+      });
+      console.log("[Firebase Auth] User metadata:", {
+        creationTime: result.user.metadata.creationTime,
+        lastSignInTime: result.user.metadata.lastSignInTime,
+      });
+    } else {
+      console.log("[Firebase Auth] ℹ️ No redirect result found (normal if not returning from redirect)");
+      console.log("[Firebase Auth] Current user after getRedirectResult:", auth.currentUser?.uid || "none");
+    }
+    return result;
+  } catch (error: any) {
+    console.error("[Firebase Auth] ❌ Redirect result error:", error);
+    console.error("[Firebase Auth] Error code:", error?.code);
+    console.error("[Firebase Auth] Error message:", error?.message);
+    console.error("[Firebase Auth] Error stack:", error?.stack);
+    // Re-throw to allow callers to handle errors
+    throw error;
+  }
 }
 
 // Send password reset email

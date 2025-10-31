@@ -53,6 +53,10 @@ export function Header() {
         <div className="flex items-center gap-4">
           {/* Navigation links - adaptive based on auth state */}
           <nav className="hidden sm:flex items-center gap-4">
+            {/* Home button - always visible */}
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/">{t("Home", "الرئيسية")}</Link>
+            </Button>
             {user ? (
               // Logged in: Show dashboard and CV builder links
               <>
@@ -67,8 +71,11 @@ export function Header() {
                 </Button>
               </>
             ) : (
-              // Not logged in: Show public navigation
+              // Not logged in: Show public navigation (guest users can access CV builder)
               <>
+                <Button asChild variant="ghost" size="sm">
+                  <Link href="/create-cv">{t("Create CV", "إنشاء سيرة")}</Link>
+                </Button>
                 <Button asChild variant="ghost" size="sm">
                   <Link href="/pricing">{t("Pricing", "الأسعار")}</Link>
                 </Button>
@@ -79,45 +86,37 @@ export function Header() {
             )}
           </nav>
 
-          {/* User menu (when logged in) or Sign In button (when not) */}
-          {!loading && (
-            <>
-              {user ? (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" className="flex items-center gap-2">
-                      <User className="h-4 w-4" />
-                      <span className="hidden sm:inline">{user.email?.split("@")[0] || t("Account", "حساب")}</span>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align={isAr ? "start" : "end"}>
-                    <DropdownMenuLabel>{t("My Account", "حسابي")}</DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem asChild>
-                      <Link href="/dashboard" className="flex items-center gap-2">
-                        <Settings className="h-4 w-4" />
-                        {t("Dashboard", "لوحة التحكم")}
-                      </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                      <Link href="/create-cv" className="flex items-center gap-2">
-                        <User className="h-4 w-4" />
-                        {t("Create CV", "إنشاء سيرة")}
-                      </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={handleSignOut} className="text-red-600 dark:text-red-400">
-                      <LogOut className="h-4 w-4 mr-2" />
-                      {t("Sign Out", "تسجيل الخروج")}
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              ) : (
-                <Button asChild size="sm" className="hidden sm:inline-flex text-white" style={{ backgroundColor: "#0d47a1" }}>
-                  <Link href="/auth/login">{t("Sign In", "تسجيل الدخول")}</Link>
+          {/* User menu (when logged in) */}
+          {!loading && user && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="flex items-center gap-2">
+                  <User className="h-4 w-4" />
+                  <span className="hidden sm:inline">{user.email?.split("@")[0] || t("Account", "حساب")}</span>
                 </Button>
-              )}
-            </>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align={isAr ? "start" : "end"}>
+                <DropdownMenuLabel>{t("My Account", "حسابي")}</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link href="/dashboard" className="flex items-center gap-2">
+                    <Settings className="h-4 w-4" />
+                    {t("Dashboard", "لوحة التحكم")}
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/create-cv" className="flex items-center gap-2">
+                    <User className="h-4 w-4" />
+                    {t("Create CV", "إنشاء سيرة")}
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleSignOut} className="text-red-600 dark:text-red-400">
+                  <LogOut className="h-4 w-4 mr-2" />
+                  {t("Sign Out", "تسجيل الخروج")}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
 
           {/* Language toggle - always visible */}

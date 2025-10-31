@@ -137,4 +137,84 @@ export async function setUserPlanFromProduct(userId: string, product: "one_time"
   }
 }
 
+// ============================================================================
+// CV DRAFT FUNCTIONS
+// ============================================================================
+// Single draft per user stored at /drafts/{userId}
+// Contains all CV form data including personal details, experience, education,
+// skills, languages, certifications, template selection, and timestamps
+
+export type CvDraftData = {
+  fullName: string;
+  title?: string;
+  summary?: string;
+  contact: {
+    email?: string;
+    phone?: string;
+    location?: string;
+    website?: string;
+  };
+  experience: Array<{
+    company: string;
+    role: string;
+    startDate: string;
+    endDate?: string;
+    description?: string;
+  }>;
+  education: Array<{
+    school: string;
+    degree: string;
+    startDate: string;
+    endDate?: string;
+  }>;
+  skills: string[];
+  languages: string[];
+  certifications: string[];
+  templateKey: string;
+  updatedAt?: any; // Firestore Timestamp
+  createdAt?: any; // Firestore Timestamp
+};
+
+/**
+ * Saves or updates a single draft per user at /drafts/{userId}
+ * Overwrites existing draft if present (single draft per user policy)
+ * @param userId - User's Firebase Auth UID
+ * @param draftData - Complete CV form data to save
+ * @returns Promise resolving when save is complete
+ */
+export async function saveUserDraft(userId: string, draftData: CvDraftData): Promise<void> {
+  const db = getFirestore(getFirebaseApp());
+  const ref = doc(db, "drafts", userId);
+  
+  const existing = await getDoc(ref);
+  const isNew = !existing.exists();
+  
+  await setDoc(ref, {
+    ...draftData,
+    ...(isNew ? { createdAt: serverTimestamp() } : {}),
+    updatedAt: serverTimestamp(),
+  }, { merge: false }); // Overwrite completely (single draft per user)
+}
+
+/**
+ * Retrieves the user's draft from /drafts/{userId}
+ * @param userId - User's Firebase Auth UID
+ * @returns Draft data or null if no draft exists
+ */
+export async function getUserDraft(userId: string): Promise<CvDraftData | null> {
+  const db = getFirestore(getFirebaseApp());
+  const snapshot = await getDoc(doc(db, "drafts", userId));
+  if (!snapshot.exists()) return null;
+  return snapshot.data() as CvDraftData;
+}
+
+/**
+ * Deletes the user's draft from /drafts/{userId}
+ * @param userId - User's Firebase Auth UID
+ */
+export async function deleteUserDraft(userId: string): Promise<void> {
+  const db = getFirestore(getFirebaseApp());
+  await deleteDoc(doc(db, "drafts", userId));
+}
+
 

@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Dialog,
@@ -31,6 +32,18 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { CV_TIPS, FIELD_HELP, hasMinimumDataForAI, formatValidationMessage, countFormErrors } from "@/lib/cv-helpers";
+import { AuthRequiredModal } from "@/components/auth/AuthRequiredModal";
+import {
+  saveGuestDraft,
+  loadGuestDraft,
+  getGuestDraftTimestamp,
+  hasGuestDraft,
+  migrateGuestDraft,
+  type GuestDraftData,
+} from "@/lib/guest-drafts";
+import { StepIndicator } from "@/components/cv-builder/StepIndicator";
+import { TemplateSelector } from "@/components/cv-builder/TemplateSelector";
+import { DataImportStep } from "@/components/cv-builder/DataImportStep";
 
 // Enhanced CV builder schema with robust validation rules
 // All validation messages are bilingual (EN/AR) and support partial data for drafts
@@ -129,11 +142,34 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>;
 
+/**
+ * CV Builder Page - Guest Mode Enabled
+ * 
+ * This page implements a "guest mode" user flow that maximizes conversions by:
+ * 1. Allowing unauthenticated users to access and use the CV builder immediately
+ * 2. Permitting guests to create/edit CVs and preview without sign-up
+ * 3. Requiring authentication only for protected actions:
+ *    - Save Draft (persist to cloud)
+ *    - Load Draft (from cloud account)
+ *    - Download PDF (premium feature / paywall)
+ *    - AI Enhancement (premium feature)
+ * 4. Using localStorage for guest drafts (automatically migrated to account on sign-in)
+ * 
+ * When a protected action is triggered, an AuthRequiredModal appears prompting
+ * sign-in/sign-up. After successful authentication, the intended action is
+ * automatically completed.
+ * 
+ * Future extensibility:
+ * - Add social login buttons directly in auth modal
+ * - Add "Continue as guest" option with limitations banner
+ * - Add trial mode (e.g., 1 free download for guests)
+ * - Add draft expiration warnings
+ */
 export default function CreateCvPage() {
   const router = useRouter();
   const params = useSearchParams();
   const cvId = params.get("id");
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { isAr, t } = useLocale();
 
   const form = useForm<FormValues>({
@@ -159,7 +195,7 @@ export default function CreateCvPage() {
   const langsArray = useFieldArray({ control: form.control, name: "languages" });
   const certsArray = useFieldArray({ control: form.control, name: "certifications" });
 
-  // Draft state management
+  // Draft state management (supports both authenticated and guest modes)
   const [draftLoading, setDraftLoading] = useState(false);
   const [draftSaving, setDraftSaving] = useState(false);
   const [draftStatus, setDraftStatus] = useState<"idle" | "success" | "error">("idle");
@@ -170,6 +206,32 @@ export default function CreateCvPage() {
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
   const hasUnsavedChanges = useRef(false);
   const hasLoadedDraft = useRef(false);
+
+  // Auth modal state for protected actions
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authModalAction, setAuthModalAction] = useState<"save" | "download" | "premium" | "load" | "general">("general");
+  const [pendingProtectedAction, setPendingProtectedAction] = useState<(() => void) | null>(null);
+
+  // Step-based wizard state
+  const [currentStep, setCurrentStep] = useState(1); // 1: Template, 2: Import, 3+: Form sections
+  const [selectedTemplate, setSelectedTemplate] = useState<string>(form.getValues("templateKey") || "classic");
+  const [dataImported, setDataImported] = useState(false);
+  
+  // Track "Present" checkbox state for each experience entry
+  // Key: experience index, Value: boolean (is present)
+  const [presentStates, setPresentStates] = useState<Record<number, boolean>>({});
+  
+  // Define steps for the wizard
+  const steps = useMemo(() => [
+    { key: "template", label: { en: "Template", ar: "القالب" } },
+    { key: "import", label: { en: "Import", ar: "الاستيراد" } },
+    { key: "personal", label: { en: "Personal", ar: "بيانات" } },
+    { key: "experience", label: { en: "Experience", ar: "خبرات" } },
+    { key: "education", label: { en: "Education", ar: "تعليم" } },
+    { key: "skills", label: { en: "Skills", ar: "مهارات" } },
+    { key: "languages", label: { en: "Languages", ar: "لغات" } },
+    { key: "certs", label: { en: "Certifications", ar: "شهادات" } },
+  ], []);
 
   // Track form changes for unsaved changes detection (only after initial load)
   useEffect(() => {
@@ -182,13 +244,52 @@ export default function CreateCvPage() {
     return () => subscription.unsubscribe();
   }, [form]);
 
-  // Load existing CV if cvId is present, otherwise auto-load draft
+  // Handle post-authentication callback (execute pending action after user signs in)
+  useEffect(() => {
+    if (authLoading || !user) return;
+
+    // Check if there's a pending action from authentication
+    const checkAuthCallback = () => {
+      try {
+        const stored = sessionStorage.getItem("authCallback");
+        if (!stored) return;
+
+        const callback = JSON.parse(stored);
+        if (callback.callback === "pending" && pendingProtectedAction) {
+          // Execute the pending action
+          pendingProtectedAction();
+          setPendingProtectedAction(null);
+          sessionStorage.removeItem("authCallback");
+
+          // Also migrate guest draft to user account if exists
+          if (hasGuestDraft()) {
+            migrateGuestDraft(user.uid, async (uid, data) => {
+              await saveUserDraft(uid, data as CvDraftData);
+            }).catch((err) => {
+              console.error("Failed to migrate guest draft:", err);
+            });
+          }
+        }
+      } catch (error) {
+        console.error("Failed to process auth callback:", error);
+        sessionStorage.removeItem("authCallback");
+      }
+    };
+
+    checkAuthCallback();
+  }, [user, authLoading, pendingProtectedAction]);
+
+  // Load existing CV if cvId is present, otherwise auto-load draft (authenticated) or guest draft
   useEffect(() => {
     async function loadData() {
-      if (!user) return;
-
-      // If editing a specific CV, load that instead of draft
+      // If editing a specific CV (authenticated only)
       if (cvId) {
+        if (!user) {
+          // Redirect to auth if trying to edit CV without auth
+          router.push("/auth?redirect=/create-cv&id=" + cvId);
+          return;
+        }
+
         try {
           // Import getUserCv for editing existing CVs
           const { getUserCv } = await import("@/firebase/firestore");
@@ -206,6 +307,17 @@ export default function CreateCvPage() {
               certifications: (data as any).certifications || [],
               templateKey: (data as any).templateKey || "classic",
             });
+            // Set present states for experience entries
+            const importedPresentStates: Record<number, boolean> = {};
+            ((data as any).experience || []).forEach((exp: any, expIdx: number) => {
+              if (!exp.endDate || exp.endDate.trim() === "") {
+                importedPresentStates[expIdx] = true;
+              }
+            });
+            setPresentStates(importedPresentStates);
+            // Set template and move to form entry
+            setSelectedTemplate((data as any).templateKey || "classic");
+            setCurrentStep(3);
             hasLoadedDraft.current = true;
           }
         } catch (error) {
@@ -214,8 +326,232 @@ export default function CreateCvPage() {
         return; // Don't load draft if editing specific CV
       }
 
-      // Otherwise, auto-load draft on mount
+      // For authenticated users: load cloud draft
+      if (user) {
+        setDraftLoading(true);
+        try {
+          const draft = await getUserDraft(user.uid);
+          if (draft) {
+            setDraftExists(true);
+            if (draft.updatedAt) {
+              const timestamp = draft.updatedAt.toDate ? draft.updatedAt.toDate() : new Date(draft.updatedAt.seconds * 1000);
+              setDraftLastUpdated(timestamp);
+            }
+            // Pre-fill form with draft data
+            form.reset({
+              fullName: draft.fullName || "",
+              title: draft.title || "",
+              summary: draft.summary || "",
+              contact: draft.contact || { email: "", phone: "", location: "", website: "" },
+              experience: draft.experience || [],
+              education: draft.education || [],
+              skills: draft.skills || [],
+              languages: draft.languages || [],
+              certifications: draft.certifications || [],
+              templateKey: draft.templateKey || "classic",
+            });
+            // Set present states for experience entries (empty endDate = present)
+            const presentStatesMap: Record<number, boolean> = {};
+            (draft.experience || []).forEach((exp, expIdx) => {
+              if (!exp.endDate || exp.endDate.trim() === "") {
+                presentStatesMap[expIdx] = true;
+              }
+            });
+            setPresentStates(presentStatesMap);
+            // Set template and move to form entry (step 3+)
+            setSelectedTemplate(draft.templateKey || "classic");
+            setCurrentStep(3); // Move to Personal Info step after loading draft
+            hasLoadedDraft.current = true;
+            setDraftStatus("success");
+            setDraftMessage(t("Draft loaded successfully.", "تم تحميل المسودة بنجاح."));
+            setTimeout(() => setDraftStatus("idle"), 3000);
+          } else {
+            setDraftExists(false);
+            // Try to load guest draft if no cloud draft exists
+            const guestDraft = loadGuestDraft();
+            if (guestDraft) {
+              form.reset({
+                fullName: guestDraft.fullName || "",
+                title: guestDraft.title || "",
+                summary: guestDraft.summary || "",
+                contact: guestDraft.contact || { email: "", phone: "", location: "", website: "" },
+                experience: guestDraft.experience || [],
+                education: guestDraft.education || [],
+                skills: guestDraft.skills || [],
+                languages: guestDraft.languages || [],
+                certifications: guestDraft.certifications || [],
+                templateKey: guestDraft.templateKey || "classic",
+              });
+              // Set present states for experience entries
+              const guestPresentStates: Record<number, boolean> = {};
+              (guestDraft.experience || []).forEach((exp, expIdx) => {
+                if (!exp.endDate || exp.endDate.trim() === "") {
+                  guestPresentStates[expIdx] = true;
+                }
+              });
+              setPresentStates(guestPresentStates);
+              // Set template and move to form entry
+              setSelectedTemplate(guestDraft.templateKey || "classic");
+              setCurrentStep(3);
+              hasLoadedDraft.current = true;
+              // Migrate guest draft to cloud
+              await migrateGuestDraft(user.uid, async (uid, data) => {
+                await saveUserDraft(uid, data as CvDraftData);
+              });
+              setDraftStatus("success");
+              setDraftMessage(t("Guest draft migrated to your account.", "تم نقل المسودة الضيف إلى حسابك."));
+              setTimeout(() => setDraftStatus("idle"), 3000);
+            }
+          }
+        } catch (error: any) {
+          console.error("Failed to load draft:", error);
+          setDraftStatus("error");
+          setDraftMessage(t("Failed to load draft.", "فشل تحميل المسودة."));
+          setTimeout(() => setDraftStatus("idle"), 3000);
+        } finally {
+          setDraftLoading(false);
+        }
+      } else {
+        // For guest users: load from localStorage
+        const guestDraft = loadGuestDraft();
+        if (guestDraft) {
+          setDraftExists(true);
+          const timestamp = getGuestDraftTimestamp();
+          if (timestamp) {
+            setDraftLastUpdated(timestamp);
+          }
+          form.reset({
+            fullName: guestDraft.fullName || "",
+            title: guestDraft.title || "",
+            summary: guestDraft.summary || "",
+            contact: guestDraft.contact || { email: "", phone: "", location: "", website: "" },
+            experience: guestDraft.experience || [],
+            education: guestDraft.education || [],
+            skills: guestDraft.skills || [],
+            languages: guestDraft.languages || [],
+            certifications: guestDraft.certifications || [],
+            templateKey: guestDraft.templateKey || "classic",
+          });
+          // Set present states for experience entries
+          const guestLoadPresentStates1: Record<number, boolean> = {};
+          (guestDraft.experience || []).forEach((exp, expIdx) => {
+            if (!exp.endDate || exp.endDate.trim() === "") {
+              guestLoadPresentStates1[expIdx] = true;
+            }
+          });
+          setPresentStates(guestLoadPresentStates1);
+          // Set template and move to form entry
+          setSelectedTemplate(guestDraft.templateKey || "classic");
+          setCurrentStep(3);
+          hasLoadedDraft.current = true;
+        } else {
+          setDraftExists(false);
+        }
+      }
+    }
+    loadData();
+  }, [user, cvId, form, t, router]);
+
+  // Save draft function - supports both authenticated (cloud) and guest (localStorage) modes
+  // Single draft per user policy: each save overwrites the previous draft
+  async function handleSaveDraft() {
+    const values = form.getValues();
+    const draftData: GuestDraftData = {
+      fullName: values.fullName || "",
+      title: values.title,
+      summary: values.summary,
+      contact: values.contact || { email: "", phone: "", location: "", website: "" },
+      experience: values.experience || [],
+      education: values.education || [],
+      skills: values.skills || [],
+      languages: values.languages || [],
+      certifications: values.certifications || [],
+      templateKey: values.templateKey || "classic",
+    };
+
+    // If authenticated, save to Firestore; otherwise prompt for auth
+    if (user) {
+      setDraftSaving(true);
+      setDraftStatus("idle");
+      setDraftMessage(null);
+
+      try {
+        await saveUserDraft(user.uid, draftData as CvDraftData);
+        setDraftExists(true);
+        setDraftLastUpdated(new Date());
+        hasUnsavedChanges.current = false;
+        setDraftStatus("success");
+        setDraftMessage(t("Draft saved successfully!", "تم حفظ المسودة بنجاح!"));
+        setTimeout(() => {
+          setDraftStatus("idle");
+          setDraftMessage(null);
+        }, 3000);
+      } catch (error: any) {
+        console.error("Failed to save draft:", error);
+        setDraftStatus("error");
+        setDraftMessage(
+          error?.message || t("Failed to save draft. Please try again.", "فشل حفظ المسودة. يرجى المحاولة مرة أخرى.")
+        );
+        setTimeout(() => {
+          setDraftStatus("idle");
+          setDraftMessage(null);
+        }, 5000);
+      } finally {
+        setDraftSaving(false);
+      }
+    } else {
+      // Guest mode: save to localStorage as fallback, but prompt for auth to save to cloud
+      try {
+        saveGuestDraft(draftData);
+        setDraftLastUpdated(new Date());
+        hasUnsavedChanges.current = false;
+        setDraftStatus("success");
+        setDraftMessage(t("Draft saved locally. Sign in to save to cloud.", "تم حفظ المسودة محليًا. سجّل الدخول للحفظ على السحابة."));
+        setTimeout(() => {
+          setDraftStatus("idle");
+          setDraftMessage(null);
+        }, 4000);
+
+        // Show auth modal for cloud save option
+        setAuthModalAction("save");
+        setPendingProtectedAction(() => async () => {
+          // After auth, this will be called to save to cloud
+          if (user) {
+            await saveUserDraft(user.uid, draftData as CvDraftData);
+            setDraftStatus("success");
+            setDraftMessage(t("Draft saved to cloud!", "تم حفظ المسودة على السحابة!"));
+            setTimeout(() => {
+              setDraftStatus("idle");
+              setDraftMessage(null);
+            }, 3000);
+          }
+        });
+        setShowAuthModal(true);
+      } catch (error: any) {
+        console.error("Failed to save guest draft:", error);
+        setDraftStatus("error");
+        setDraftMessage(t("Failed to save draft.", "فشل حفظ المسودة."));
+        setTimeout(() => setDraftStatus("idle"), 3000);
+      }
+    }
+  }
+
+  // Load draft function with confirmation if there are unsaved changes
+  // Supports both authenticated (cloud) and guest (localStorage) modes
+  async function handleLoadDraft(confirmed = false) {
+    // Check if there are unsaved changes
+    if (!confirmed && hasUnsavedChanges.current) {
+      setPendingAction(() => () => handleLoadDraft(true));
+      setShowConfirmDialog(true);
+      return;
+    }
+
+    // For authenticated users: load from cloud
+    if (user) {
       setDraftLoading(true);
+      setDraftStatus("idle");
+      setDraftMessage(null);
+
       try {
         const draft = await getUserDraft(user.uid);
         if (draft) {
@@ -224,7 +560,6 @@ export default function CreateCvPage() {
             const timestamp = draft.updatedAt.toDate ? draft.updatedAt.toDate() : new Date(draft.updatedAt.seconds * 1000);
             setDraftLastUpdated(timestamp);
           }
-          // Pre-fill form with draft data
           form.reset({
             fullName: draft.fullName || "",
             title: draft.title || "",
@@ -237,151 +572,109 @@ export default function CreateCvPage() {
             certifications: draft.certifications || [],
             templateKey: draft.templateKey || "classic",
           });
+          // Set present states for experience entries
+          const loadDraftPresentStates: Record<number, boolean> = {};
+          (draft.experience || []).forEach((exp, expIdx) => {
+            if (!exp.endDate || exp.endDate.trim() === "") {
+              loadDraftPresentStates[expIdx] = true;
+            }
+          });
+          setPresentStates(loadDraftPresentStates);
           hasLoadedDraft.current = true;
+          hasUnsavedChanges.current = false; // Reset unsaved changes flag after loading
           setDraftStatus("success");
-          setDraftMessage(t("Draft loaded successfully.", "تم تحميل المسودة بنجاح."));
-          setTimeout(() => setDraftStatus("idle"), 3000);
+          setDraftMessage(t("Draft loaded successfully!", "تم تحميل المسودة بنجاح!"));
+          setTimeout(() => {
+            setDraftStatus("idle");
+            setDraftMessage(null);
+          }, 3000);
         } else {
           setDraftExists(false);
+          setDraftStatus("error");
+          setDraftMessage(t("No draft found. Create one first.", "لا توجد مسودة. أنشئ واحدة أولاً."));
+          setTimeout(() => {
+            setDraftStatus("idle");
+            setDraftMessage(null);
+          }, 3000);
         }
       } catch (error: any) {
         console.error("Failed to load draft:", error);
         setDraftStatus("error");
-        setDraftMessage(t("Failed to load draft.", "فشل تحميل المسودة."));
-        setTimeout(() => setDraftStatus("idle"), 3000);
+        setDraftMessage(
+          error?.message || t("Failed to load draft. Please try again.", "فشل تحميل المسودة. يرجى المحاولة مرة أخرى.")
+        );
+        setTimeout(() => {
+          setDraftStatus("idle");
+          setDraftMessage(null);
+        }, 5000);
       } finally {
         setDraftLoading(false);
       }
-    }
-    loadData();
-  }, [user, cvId, form, t]);
+    } else {
+      // For guest users: load from localStorage
+      setDraftLoading(true);
+      setDraftStatus("idle");
+      setDraftMessage(null);
 
-  // Save draft function - always saves (overwrites existing draft if present)
-  // Single draft per user policy: each save overwrites the previous draft
-  async function handleSaveDraft() {
-    if (!user) {
-      setDraftStatus("error");
-      setDraftMessage(t("Please sign in to save drafts.", "يرجى تسجيل الدخول لحفظ المسودات."));
-      setTimeout(() => setDraftStatus("idle"), 3000);
-      return;
-    }
-
-    setDraftSaving(true);
-    setDraftStatus("idle");
-    setDraftMessage(null);
-
-    try {
-      const values = form.getValues();
-      // Allow saving drafts with partial/incomplete data (bypass form validation)
-      // This enables users to save work-in-progress CVs without completing all required fields
-      const draftData: CvDraftData = {
-        fullName: values.fullName || "", // Allow empty for drafts (will be validated on final submission)
-        title: values.title,
-        summary: values.summary,
-        contact: values.contact,
-        experience: values.experience || [],
-        education: values.education || [],
-        skills: values.skills || [],
-        languages: values.languages || [],
-        certifications: values.certifications || [],
-        templateKey: values.templateKey || "classic",
-      };
-
-      await saveUserDraft(user.uid, draftData);
-      
-      setDraftExists(true);
-      setDraftLastUpdated(new Date());
-      hasUnsavedChanges.current = false;
-      setDraftStatus("success");
-      setDraftMessage(t("Draft saved successfully!", "تم حفظ المسودة بنجاح!"));
-      setTimeout(() => {
-        setDraftStatus("idle");
-        setDraftMessage(null);
-      }, 3000);
-    } catch (error: any) {
-      console.error("Failed to save draft:", error);
-      setDraftStatus("error");
-      setDraftMessage(
-        error?.message || t("Failed to save draft. Please try again.", "فشل حفظ المسودة. يرجى المحاولة مرة أخرى.")
-      );
-      setTimeout(() => {
-        setDraftStatus("idle");
-        setDraftMessage(null);
-      }, 5000);
-    } finally {
-      setDraftSaving(false);
-    }
-  }
-
-  // Load draft function with confirmation if there are unsaved changes
-  async function handleLoadDraft(confirmed = false) {
-    if (!user) {
-      setDraftStatus("error");
-      setDraftMessage(t("Please sign in to load drafts.", "يرجى تسجيل الدخول لتحميل المسودات."));
-      setTimeout(() => setDraftStatus("idle"), 3000);
-      return;
-    }
-
-    // Check if there are unsaved changes
-    if (!confirmed && hasUnsavedChanges.current) {
-      setPendingAction(() => () => handleLoadDraft(true));
-      setShowConfirmDialog(true);
-      return;
-    }
-
-    setDraftLoading(true);
-    setDraftStatus("idle");
-    setDraftMessage(null);
-
-    try {
-      const draft = await getUserDraft(user.uid);
-      if (draft) {
-        setDraftExists(true);
-        if (draft.updatedAt) {
-          const timestamp = draft.updatedAt.toDate ? draft.updatedAt.toDate() : new Date(draft.updatedAt.seconds * 1000);
-          setDraftLastUpdated(timestamp);
+      try {
+        const guestDraft = loadGuestDraft();
+        if (guestDraft) {
+          setDraftExists(true);
+          const timestamp = getGuestDraftTimestamp();
+          if (timestamp) {
+            setDraftLastUpdated(timestamp);
+          }
+          form.reset({
+            fullName: guestDraft.fullName || "",
+            title: guestDraft.title || "",
+            summary: guestDraft.summary || "",
+            contact: guestDraft.contact || { email: "", phone: "", location: "", website: "" },
+            experience: guestDraft.experience || [],
+            education: guestDraft.education || [],
+            skills: guestDraft.skills || [],
+            languages: guestDraft.languages || [],
+            certifications: guestDraft.certifications || [],
+            templateKey: guestDraft.templateKey || "classic",
+          });
+          // Set present states for experience entries
+          const handleLoadDraftGuestPresentStates2: Record<number, boolean> = {};
+          (guestDraft.experience || []).forEach((exp, expIdx) => {
+            if (!exp.endDate || exp.endDate.trim() === "") {
+              handleLoadDraftGuestPresentStates2[expIdx] = true;
+            }
+          });
+          setPresentStates(handleLoadDraftGuestPresentStates2);
+          // Set template and move to form entry
+          setSelectedTemplate(guestDraft.templateKey || "classic");
+          setCurrentStep(3);
+          hasLoadedDraft.current = true;
+          hasUnsavedChanges.current = false;
+          setDraftStatus("success");
+          setDraftMessage(t("Guest draft loaded. Sign in to access cloud drafts.", "تم تحميل المسودة الضيف. سجّل الدخول للوصول إلى مسودات السحابة."));
+          setTimeout(() => {
+            setDraftStatus("idle");
+            setDraftMessage(null);
+          }, 4000);
+        } else {
+          setDraftExists(false);
+          setDraftStatus("error");
+          setDraftMessage(t("No draft found. Create one first.", "لا توجد مسودة. أنشئ واحدة أولاً."));
+          setTimeout(() => {
+            setDraftStatus("idle");
+            setDraftMessage(null);
+          }, 3000);
         }
-        form.reset({
-          fullName: draft.fullName || "",
-          title: draft.title || "",
-          summary: draft.summary || "",
-          contact: draft.contact || { email: "", phone: "", location: "", website: "" },
-          experience: draft.experience || [],
-          education: draft.education || [],
-          skills: draft.skills || [],
-          languages: draft.languages || [],
-          certifications: draft.certifications || [],
-          templateKey: draft.templateKey || "classic",
-        });
-        hasLoadedDraft.current = true;
-        hasUnsavedChanges.current = false; // Reset unsaved changes flag after loading
-        setDraftStatus("success");
-        setDraftMessage(t("Draft loaded successfully!", "تم تحميل المسودة بنجاح!"));
-        setTimeout(() => {
-          setDraftStatus("idle");
-          setDraftMessage(null);
-        }, 3000);
-      } else {
-        setDraftExists(false);
+      } catch (error: any) {
+        console.error("Failed to load guest draft:", error);
         setDraftStatus("error");
-        setDraftMessage(t("No draft found. Create one first.", "لا توجد مسودة. أنشئ واحدة أولاً."));
+        setDraftMessage(t("Failed to load draft.", "فشل تحميل المسودة."));
         setTimeout(() => {
           setDraftStatus("idle");
           setDraftMessage(null);
-        }, 3000);
+        }, 5000);
+      } finally {
+        setDraftLoading(false);
       }
-    } catch (error: any) {
-      console.error("Failed to load draft:", error);
-      setDraftStatus("error");
-      setDraftMessage(
-        error?.message || t("Failed to load draft. Please try again.", "فشل تحميل المسودة. يرجى المحاولة مرة أخرى.")
-      );
-      setTimeout(() => {
-        setDraftStatus("idle");
-        setDraftMessage(null);
-      }, 5000);
-    } finally {
-      setDraftLoading(false);
     }
   }
 
@@ -394,12 +687,61 @@ export default function CreateCvPage() {
     setShowConfirmDialog(false);
   }
 
-  // Simple template dropdown for MVP
-  const templates = useMemo(() => [
-    { key: "classic", name: t("Classic", "كلاسيك") },
-    { key: "modern", name: t("Modern", "حديث") },
-    { key: "elegant", name: t("Elegant", "أنيق") },
-  ], [t]);
+  // Template selection handler
+  function handleTemplateSelect(templateKey: string) {
+    setSelectedTemplate(templateKey);
+    form.setValue("templateKey", templateKey);
+  }
+
+  // Data import handler
+  function handleDataImport(importedData: any) {
+    // Merge imported data with existing form data
+    const existingData = form.getValues();
+    const mergedData = {
+      ...existingData,
+      ...importedData,
+      // Merge arrays instead of replacing
+      experience: [...(existingData.experience || []), ...(importedData.experience || [])],
+      education: [...(existingData.education || []), ...(importedData.education || [])],
+      skills: [...(new Set([...(existingData.skills || []), ...(importedData.skills || [])]))],
+      languages: [...(new Set([...(existingData.languages || []), ...(importedData.languages || [])]))],
+      certifications: [...(new Set([...(existingData.certifications || []), ...(importedData.certifications || [])]))],
+    };
+    
+    form.reset(mergedData);
+    hasLoadedDraft.current = true;
+    setDataImported(true);
+    
+    // Show success message
+    setDraftStatus("success");
+    setDraftMessage(t("Data imported successfully! Please review and edit.", "تم استيراد البيانات بنجاح! يرجى المراجعة والتعديل."));
+    setTimeout(() => {
+      setDraftStatus("idle");
+      setDraftMessage(null);
+    }, 5000);
+  }
+
+  // Navigation handlers
+  function handleNextStep() {
+    if (currentStep < steps.length) {
+      setCurrentStep(currentStep + 1);
+    }
+  }
+
+  function handlePreviousStep() {
+    if (currentStep > 1) {
+      setCurrentStep(currentStep - 1);
+    }
+  }
+
+  function handleSkipImport() {
+    setCurrentStep(3); // Skip to Personal Info step
+  }
+
+  // Sync template selection with form
+  useEffect(() => {
+    form.setValue("templateKey", selectedTemplate);
+  }, [selectedTemplate, form]);
 
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
@@ -412,8 +754,16 @@ export default function CreateCvPage() {
   const [linkedInUrl, setLinkedInUrl] = useState("");
   const [linkedInInstructions, setLinkedInInstructions] = useState<string[]>([]);
 
-  // Validation check before AI enhancement
+  // Validation check before AI enhancement (premium feature - requires authentication)
   async function enhanceWithAI() {
+    // Check authentication first (AI enhancement is a premium feature)
+    if (!user) {
+      setAuthModalAction("premium");
+      setPendingProtectedAction(() => enhanceWithAI);
+      setShowAuthModal(true);
+      return;
+    }
+
     setAiError(null);
     
     // Check minimum required data
@@ -466,6 +816,15 @@ export default function CreateCvPage() {
   }
 
   async function exportPdf() {
+    // PDF download is a protected action (premium feature / paywall)
+    // Require authentication before allowing download
+    if (!user) {
+      setAuthModalAction("download");
+      setPendingProtectedAction(() => exportPdf);
+      setShowAuthModal(true);
+      return;
+    }
+
     // Validate form before PDF export
     const isValid = await form.trigger();
     if (!isValid) {
@@ -500,6 +859,7 @@ export default function CreateCvPage() {
       return;
     }
 
+    // TODO(paywall): Check user plan/credits before allowing download
     // TODO(templates): Switch on templateKey for different designs; add fonts for Arabic
     await downloadPdf(<ClassicTemplate data={data} isAr={isAr} />, `${data.fullName || "cv"}.pdf`);
   }
@@ -606,12 +966,33 @@ export default function CreateCvPage() {
     }
   }
 
+  // Get current step key
+  const currentStepKey = steps[currentStep - 1]?.key || "template";
+
   return (
     <SiteLayout>
       <section className="mx-auto w-full max-w-5xl p-6 sm:p-8 md:p-12">
+        {/* Step Indicator - only show if past template selection */}
+        {currentStep > 1 && (
+          <div className="mb-6">
+            <StepIndicator
+              currentStep={currentStep}
+              totalSteps={steps.length}
+              steps={steps}
+            />
+          </div>
+        )}
+
         <header className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-semibold">{t("CV Builder", "منشئ السيرة")}</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-semibold">{t("CV Builder", "منشئ السيرة")}</h1>
+              {!user && (
+                <span className="text-xs px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400">
+                  {t("Guest Mode", "وضع الضيف")}
+                </span>
+              )}
+            </div>
             {draftLastUpdated && (
               <p className="mt-1 flex items-center gap-1 text-xs text-zinc-600 dark:text-zinc-400">
                 <Clock className="h-3 w-3" />
@@ -622,6 +1003,17 @@ export default function CreateCvPage() {
                   hour: "2-digit",
                   minute: "2-digit",
                 })}
+                {!user && (
+                  <span className="ml-1 text-zinc-400">({t("local", "محلي")})</span>
+                )}
+              </p>
+            )}
+            {!user && !draftLastUpdated && (
+              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                {t(
+                  "Creating as guest. Sign in to save to cloud and access premium features.",
+                  "الإنشاء كضيف. سجّل الدخول للحفظ على السحابة والوصول إلى الميزات المميزة."
+                )}
               </p>
             )}
           </div>
@@ -699,198 +1091,90 @@ export default function CreateCvPage() {
           </Alert>
         )}
 
-        {/* Help & Support Section */}
-        <div className="mb-6 rounded-lg border bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950 p-4">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="flex items-start gap-3">
-              <HelpCircle className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
-              <div>
-                <h3 className="font-semibold text-sm mb-1">{t("Need Help?", "تحتاج مساعدة؟")}</h3>
-                <p className="text-xs text-zinc-600 dark:text-zinc-400">
-                  {t(
-                    "Get tips, view FAQs, or contact support for assistance with your CV.",
-                    "احصل على نصائح أو شاهد الأسئلة الشائعة أو اتصل بالدعم للحصول على المساعدة في سيرتك الذاتية."
-                  )}
-                </p>
+        {/* Help & Support Section - only show during form entry */}
+        {currentStep >= 3 && (
+          <div className="mb-6 rounded-lg border bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950 p-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <HelpCircle className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                <div>
+                  <h3 className="font-semibold text-sm mb-1">{t("Need Help?", "تحتاج مساعدة؟")}</h3>
+                  <p className="text-xs text-zinc-600 dark:text-zinc-400">
+                    {t(
+                      "Get tips, view FAQs, or contact support for assistance with your CV.",
+                      "احصل على نصائح أو شاهد الأسئلة الشائعة أو اتصل بالدعم للحصول على المساعدة في سيرتك الذاتية."
+                    )}
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" asChild>
+                  <a href="#faq" target="_blank" rel="noopener noreferrer">
+                    <Info className="h-4 w-4 mr-2" />
+                    {t("FAQs", "الأسئلة الشائعة")}
+                  </a>
+                </Button>
+                <Button variant="outline" size="sm" asChild>
+                  <a href="mailto:support@serapro.app?subject=CV Builder Help">
+                    {t("Contact Support", "اتصل بالدعم")}
+                  </a>
+                </Button>
               </div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <Button variant="outline" size="sm" asChild>
-                <a href="#faq" target="_blank" rel="noopener noreferrer">
-                  <Info className="h-4 w-4 mr-2" />
-                  {t("FAQs", "الأسئلة الشائعة")}
-                </a>
-              </Button>
-              <Button variant="outline" size="sm" asChild>
-                <a href="mailto:support@serapro.app?subject=CV Builder Help">
-                  {t("Contact Support", "اتصل بالدعم")}
-                </a>
-              </Button>
-            </div>
           </div>
-        </div>
+        )}
 
-        {/* Multi-step via Tabs for MVP (wrap everything in Form provider so FormField has context) */}
-        {/* TooltipProvider wraps entire form to enable tooltips throughout */}
-        <TooltipProvider>
-        <Form {...form}>
-        <Tabs defaultValue="personal" className="w-full">
+        {/* Step 1: Template Selection */}
+        {currentStep === 1 && (
+          <TemplateSelector
+            selectedTemplate={selectedTemplate}
+            onSelect={handleTemplateSelect}
+            onNext={handleNextStep}
+          />
+        )}
+
+        {/* Step 2: Data Import */}
+        {currentStep === 2 && (
+          <DataImportStep
+            onImport={handleDataImport}
+            onNext={handleNextStep}
+            onSkip={handleSkipImport}
+          />
+        )}
+
+        {/* Steps 3+: Form Sections */}
+        {currentStep >= 3 && (
+          <TooltipProvider>
+            <Form {...form}>
+              <Tabs value={currentStepKey} onValueChange={(value) => {
+                const stepIndex = steps.findIndex((s) => s.key === value);
+                if (stepIndex >= 0) {
+                  setCurrentStep(stepIndex + 1);
+                }
+              }} className="w-full">
           <TabsList className="grid grid-cols-3 sm:grid-cols-6">
-            <TabsTrigger value="personal">{t("Personal", "بيانات")}</TabsTrigger>
-            <TabsTrigger value="experience">{t("Experience", "خبرات")}</TabsTrigger>
-            <TabsTrigger value="education">{t("Education", "تعليم")}</TabsTrigger>
-            <TabsTrigger value="skills">{t("Skills", "مهارات")}</TabsTrigger>
-            <TabsTrigger value="languages">{t("Languages", "لغات")}</TabsTrigger>
-            <TabsTrigger value="certs">{t("Certs", "شهادات")}</TabsTrigger>
+            {steps.slice(2).map((step) => (
+              <TabsTrigger key={step.key} value={step.key}>
+                {t(step.label.en, step.label.ar)}
+              </TabsTrigger>
+            ))}
           </TabsList>
 
           {/* Personal */}
           <TabsContent value="personal" className="mt-4">
-            {/* LinkedIn Import Section */}
-            <div className="mb-6 rounded-lg border bg-zinc-50 dark:bg-zinc-900 p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <Linkedin className="h-5 w-5 text-blue-600" />
-                  <h3 className="font-semibold text-sm">{t("Import from LinkedIn", "استيراد من LinkedIn")}</h3>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleToggleLinkedInImport}
-                >
-                  {showLinkedInImport ? t("Hide", "إخفاء") : t("Show", "إظهار")}
-                </Button>
-              </div>
-
-              {showLinkedInImport && (
-                <div className="space-y-4">
-                  <p className="text-xs text-zinc-600 dark:text-zinc-400">
-                    {t(
-                      "Import your LinkedIn profile data to quickly fill your CV. We only access data you export and share with us.",
-                      "استورد بيانات ملفك الشخصي على LinkedIn لملء سيرتك الذاتية بسرعة. نحن نصل فقط إلى البيانات التي تصدرها وتشاركها معنا."
-                    )}
-                  </p>
-
-                  {/* Method 1: JSON File Upload (Primary) */}
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">{t("Upload LinkedIn Data Export (JSON)", "تحميل تصدير بيانات LinkedIn (JSON)")}</label>
-                    <div className="flex flex-col sm:flex-row gap-2">
-                      <label className="flex-1 cursor-pointer">
-                        <input
-                          type="file"
-                          accept=".json,application/json"
-                          onChange={handleFileUpload}
-                          disabled={linkedInLoading}
-                          className="hidden"
-                        />
-                        <Button
-                          variant="outline"
-                          className="w-full"
-                          disabled={linkedInLoading}
-                          asChild
-                        >
-                          <span>
-                            <Upload className="h-4 w-4 mr-2" />
-                            {linkedInLoading ? t("Importing...", "جارٍ الاستيراد...") : t("Choose JSON File", "اختر ملف JSON")}
-                          </span>
-                        </Button>
-                      </label>
-                    </div>
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                      {t(
-                        "How to export: LinkedIn Settings → Data Privacy → Get a copy of your data → Select Profile & Positions → Request archive",
-                        "كيفية التصدير: إعدادات LinkedIn → خصوصية البيانات → احصل على نسخة من بياناتك → حدد الملف الشخصي والوظائف → طلب الأرشيف"
-                      )}
-                    </p>
-                  </div>
-
-                  {/* Method 2: URL (Fallback with instructions) */}
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">{t("LinkedIn Profile URL (Limited)", "رابط ملف LinkedIn الشخصي (محدود)")}</label>
-                    <div className="flex flex-col sm:flex-row gap-2">
-                      <Input
-                        type="url"
-                        placeholder={t("https://www.linkedin.com/in/username", "https://www.linkedin.com/in/username")}
-                        value={linkedInUrl}
-                        onChange={(e) => setLinkedInUrl(e.target.value)}
-                        disabled={linkedInLoading}
-                        className="flex-1"
-                      />
-                      <Button
-                        onClick={() => {
-                          if (linkedInUrl) {
-                            handleLinkedInImport(undefined, linkedInUrl);
-                          }
-                        }}
-                        disabled={linkedInLoading || !linkedInUrl}
-                        variant="secondary"
-                      >
-                        {linkedInLoading ? (
-                          <>
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            {t("Importing...", "جارٍ الاستيراد...")}
-                          </>
-                        ) : (
-                          t("Import from URL", "استيراد من الرابط")
-                        )}
-                      </Button>
-                    </div>
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                      {t(
-                        "Note: URL import may be limited due to LinkedIn restrictions. Uploading a JSON file is more reliable.",
-                        "ملاحظة: قد يكون استيراد الرابط محدودًا بسبب قيود LinkedIn. تحميل ملف JSON أكثر موثوقية."
-                      )}
-                    </p>
-                  </div>
-
-                  {/* Help Link */}
-                  <div className="flex items-center gap-2 text-xs">
-                    <ExternalLink className="h-3 w-3" />
-                    <a
-                      href="https://www.linkedin.com/help/linkedin/answer/a554590/download-your-linkedin-data"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-600 hover:underline"
-                    >
-                      {t("Learn how to export your LinkedIn data", "تعرف على كيفية تصدير بيانات LinkedIn الخاصة بك")}
-                    </a>
-                  </div>
-
-                  {/* Error/Success Feedback */}
-                  {linkedInError && (
-                    <Alert variant="destructive" className="mt-2">
-                      <XCircle className="h-4 w-4" />
-                      <AlertDescription className="text-sm">{linkedInError}</AlertDescription>
-                    </Alert>
+            {/* Import success notification */}
+            {dataImported && (
+              <Alert className="mb-4 border-green-500 bg-green-50 dark:bg-green-950">
+                <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+                <AlertDescription className="text-green-700 dark:text-green-300">
+                  {t(
+                    "Data imported successfully! Please review and edit the information below.",
+                    "تم استيراد البيانات بنجاح! يرجى مراجعة وتعديل المعلومات أدناه."
                   )}
-                  {/* Instructions when URL import is not available */}
-                  {linkedInInstructions.length > 0 && (
-                    <Alert className="mt-2 border-blue-500 bg-blue-50 dark:bg-blue-950">
-                      <ExternalLink className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                      <AlertTitle className="text-blue-800 dark:text-blue-200 text-sm font-semibold">
-                        {t("How to export LinkedIn data:", "كيفية تصدير بيانات LinkedIn:")}
-                      </AlertTitle>
-                      <AlertDescription className="text-sm text-blue-700 dark:text-blue-300 mt-2">
-                        <ol className="list-decimal list-inside space-y-1">
-                          {linkedInInstructions.map((step, idx) => (
-                            <li key={idx}>{step}</li>
-                          ))}
-                        </ol>
-                      </AlertDescription>
-                    </Alert>
-                  )}
-                  {linkedInSuccess && (
-                    <Alert className="mt-2 border-green-500 bg-green-50 dark:bg-green-950">
-                      <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
-                      <AlertDescription className="text-sm text-green-700 dark:text-green-300">
-                        {t("LinkedIn data imported successfully! Please review the fields below.", "تم استيراد بيانات LinkedIn بنجاح! يرجى مراجعة الحقول أدناه.")}
-                      </AlertDescription>
-                    </Alert>
-                  )}
-                </div>
-              )}
-            </div>
-
+                </AlertDescription>
+              </Alert>
+            )}
+            {/* Personal Info Form Fields */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <FormField name="fullName" control={form.control} render={({ field }) => {
                   const fieldState = form.getFieldState("fullName");
@@ -1006,17 +1290,19 @@ export default function CreateCvPage() {
                     </FormItem>
                   );
                 }} />
-                <FormField name="templateKey" control={form.control} render={({ field }) => (
-                  <FormItem className="sm:col-span-2">
-                    <FormLabel>{t("Template", "القالب")}</FormLabel>
-                    <FormControl>
-                      <select className="w-full rounded-md border px-3 py-2 text-sm outline-none" {...field}>
-                        {templates.map((tpl) => (<option key={tpl.key} value={tpl.key}>{tpl.name}</option>))}
-                      </select>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )} />
+                {/* Template selection is done in Step 1, but show current selection for reference */}
+                <div className="sm:col-span-2 rounded-md border p-3 bg-zinc-50 dark:bg-zinc-900">
+                  <p className="text-sm font-medium mb-1">{t("Selected Template", "القالب المختار")}</p>
+                  <p className="text-xs text-zinc-600 dark:text-zinc-400">
+                    {selectedTemplate === "classic" ? t("Classic", "كلاسيك") :
+                     selectedTemplate === "modern" ? t("Modern", "حديث") :
+                     selectedTemplate === "elegant" ? t("Elegant", "أنيق") :
+                     t("Classic", "كلاسيك")}
+                  </p>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+                    {t("To change template, go back to Step 1.", "لتغيير القالب، ارجع إلى الخطوة 1.")}
+                  </p>
+                </div>
               </div>
           </TabsContent>
 
@@ -1076,23 +1362,58 @@ export default function CreateCvPage() {
                       <FormMessage />
                     </FormItem>
                   )} />
-                  <FormField name={`experience.${idx}.endDate`} control={form.control} render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="flex items-center gap-2">
-                        {t("End Date", "تاريخ النهاية")}
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <HelpCircle className="h-4 w-4 text-zinc-400 cursor-help" />
-                          </TooltipTrigger>
-                          <TooltipContent className="max-w-xs">
-                            <p>{t("Leave empty for current position", "اتركه فارغاً للوظيفة الحالية")}</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </FormLabel>
-                      <FormControl><Input placeholder={t("Present or YYYY-MM", "حتى الآن أو YYYY-MM")} {...field} value={field.value || ""} /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )} />
+                  <FormField name={`experience.${idx}.endDate`} control={form.control} render={({ field }) => {
+                    const isPresent = presentStates[idx] || false;
+                    
+                    return (
+                      <FormItem>
+                        <div className="flex items-center justify-between">
+                          <FormLabel className="flex items-center gap-2">
+                            {t("End Date", "تاريخ النهاية")}
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <HelpCircle className="h-4 w-4 text-zinc-400 cursor-help" />
+                              </TooltipTrigger>
+                              <TooltipContent className="max-w-xs">
+                                <p>{t("Leave empty for current position", "اتركه فارغاً للوظيفة الحالية")}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </FormLabel>
+                          <div className="flex items-center gap-2">
+                            <Checkbox
+                              id={`present-${idx}`}
+                              checked={isPresent}
+                              onCheckedChange={(checked) => {
+                                const newState = checked === true;
+                                setPresentStates((prev) => ({ ...prev, [idx]: newState }));
+                                
+                                // Clear end date when "Present" is checked
+                                if (newState) {
+                                  field.onChange("");
+                                }
+                              }}
+                            />
+                            <label
+                              htmlFor={`present-${idx}`}
+                              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                            >
+                              {t("Present", "حتى الآن")}
+                            </label>
+                          </div>
+                        </div>
+                        <FormControl>
+                          <Input
+                            placeholder={isPresent ? t("Present", "حتى الآن") : t("YYYY-MM", "YYYY-MM")}
+                            {...field}
+                            value={field.value || ""}
+                            disabled={isPresent}
+                            className={isPresent ? "bg-zinc-100 dark:bg-zinc-800 cursor-not-allowed" : ""}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    );
+                  }} />
                   <FormField name={`experience.${idx}.description`} control={form.control} render={({ field }) => {
                     const charCount = (field.value || "").length;
                     const maxChars = 1000;
@@ -1128,11 +1449,38 @@ export default function CreateCvPage() {
                     );
                   }} />
                   <div className="sm:col-span-2 flex justify-end">
-                    <Button variant="secondary" type="button" onClick={() => expArray.remove(idx)}>{t("Remove", "حذف")}</Button>
+                    <Button variant="secondary" type="button" onClick={() => {
+                      expArray.remove(idx);
+                      // Clean up present state for removed entry
+                      setPresentStates((prev) => {
+                        const updated = { ...prev };
+                        delete updated[idx];
+                        // Shift indices for entries after the removed one
+                        const shifted: Record<number, boolean> = {};
+                        Object.keys(updated).forEach((key) => {
+                          const keyNum = parseInt(key);
+                          if (keyNum > idx) {
+                            shifted[keyNum - 1] = updated[keyNum];
+                          } else if (keyNum < idx) {
+                            shifted[keyNum] = updated[keyNum];
+                          }
+                        });
+                        return shifted;
+                      });
+                    }}>{t("Remove", "حذف")}</Button>
                   </div>
                 </div>
               ))}
-              <Button type="button" onClick={() => expArray.append({ company: "", role: "", startDate: "" })}>{t("Add Experience", "إضافة خبرة")}</Button>
+              <Button type="button" onClick={() => {
+                expArray.append({ company: "", role: "", startDate: "" });
+                // Clear present state for new entry
+                const newIdx = expArray.fields.length;
+                setPresentStates((prev) => {
+                  const updated = { ...prev };
+                  delete updated[newIdx];
+                  return updated;
+                });
+              }}>{t("Add Experience", "إضافة خبرة")}</Button>
             </div>
           </TabsContent>
 
@@ -1274,8 +1622,6 @@ export default function CreateCvPage() {
             </div>
           </TabsContent>
         </Tabs>
-        </Form>
-        </TooltipProvider>
 
         {/* Validation Summary & Footer actions */}
         <div className="mt-6 space-y-4">
@@ -1312,50 +1658,88 @@ export default function CreateCvPage() {
             return null;
           })()}
 
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <Button
-              onClick={handleSaveDraft}
-              disabled={draftSaving || draftLoading}
-              className="text-white"
-              style={{ backgroundColor: "#0d47a1" }}
-            >
-              {draftSaving ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  {t("Saving...", "جارٍ الحفظ...")}
-                </>
-              ) : (
-                t("Save Draft", "حفظ مسودة")
+          <div className="flex flex-col gap-3 sm:flex-row justify-between">
+            {/* Navigation Buttons */}
+            <div className="flex gap-2">
+              {currentStep > 3 && (
+                <Button variant="outline" onClick={handlePreviousStep}>
+                  ← {t("Back", "رجوع")}
+                </Button>
               )}
-            </Button>
-            <Button
-              variant="secondary"
-              disabled={draftSaving || draftLoading}
-              onClick={async () => {
-                // Validate before finishing
-                const isValid = await form.trigger();
-                if (!isValid) {
-                  setDraftStatus("error");
-                  setDraftMessage(
-                    t(
-                      "Please fix validation errors before finishing.",
-                      "يرجى إصلاح أخطاء التحقق قبل الإنهاء."
-                    )
-                  );
-                  setTimeout(() => {
-                    setDraftStatus("idle");
-                    setDraftMessage(null);
-                  }, 5000);
-                  return;
-                }
-                await handleSaveDraft();
-                router.push("/dashboard");
-              }}
-            >
-              {t("Finish", "إنهاء")}
-            </Button>
+              {currentStep < steps.length && (
+                <Button
+                  variant="secondary"
+                  onClick={handleNextStep}
+                >
+                  {t("Next", "التالي")} →
+                </Button>
+              )}
+            </div>
+
+            {/* Save & Finish */}
+            <div className="flex gap-2">
+              <Button
+                onClick={handleSaveDraft}
+                disabled={draftSaving || draftLoading}
+                className="text-white"
+                style={{ backgroundColor: "#0d47a1" }}
+              >
+                {draftSaving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    {t("Saving...", "جارٍ الحفظ...")}
+                  </>
+                ) : (
+                  t("Save Draft", "حفظ مسودة")
+                )}
+              </Button>
+              {currentStep === steps.length && (
+                <Button
+                  variant="secondary"
+                  disabled={draftSaving || draftLoading}
+                  onClick={async () => {
+                    // Validate before finishing
+                    const isValid = await form.trigger();
+                    if (!isValid) {
+                      setDraftStatus("error");
+                      setDraftMessage(
+                        t(
+                          "Please fix validation errors before finishing.",
+                          "يرجى إصلاح أخطاء التحقق قبل الإنهاء."
+                        )
+                      );
+                      setTimeout(() => {
+                        setDraftStatus("idle");
+                        setDraftMessage(null);
+                      }, 5000);
+                      return;
+                    }
+                    
+                    // Save draft first (handles both authenticated and guest modes)
+                    await handleSaveDraft();
+                    
+                    // For authenticated users: go to dashboard; for guests: prompt to sign in
+                    if (user) {
+                      router.push("/dashboard");
+                    } else {
+                      // Guest user: prompt to sign in to access dashboard
+                      setAuthModalAction("general");
+                      setPendingProtectedAction(() => () => {
+                        router.push("/dashboard");
+                      });
+                      setShowAuthModal(true);
+                    }
+                  }}
+                >
+                  {t("Finish", "إنهاء")}
+                </Button>
+              )}
+            </div>
           </div>
         </div>
+        </Form>
+        </TooltipProvider>
+        )}
       </section>
 
       {/* Confirmation dialog for overwriting unsaved changes */}
@@ -1384,6 +1768,14 @@ export default function CreateCvPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Auth Required Modal - shown when guest user attempts protected action */}
+      <AuthRequiredModal
+        open={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        action={authModalAction}
+        onAuthSuccess={pendingProtectedAction || undefined}
+      />
     </SiteLayout>
   );
 }
