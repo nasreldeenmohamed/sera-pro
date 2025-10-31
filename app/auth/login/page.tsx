@@ -2,8 +2,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { signInWithEmailPassword, signInWithGoogle, getGoogleRedirectResult } from "@/firebase/auth";
-import { saveUserProfile } from "@/firebase/firestore";
+import { signInWithEmailPassword, signInWithGoogle } from "@/firebase/auth";
 import Link from "next/link";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
@@ -68,7 +67,7 @@ export default function LoginPage() {
     return isAr ? ar : en;
   }
 
-  // Redirect after authentication
+  // Redirect after authentication (handles both email/password and Google redirect flows)
   useEffect(() => {
     if (!authLoading && user) {
       // Store callback info for post-auth action execution
@@ -78,98 +77,14 @@ export default function LoginPage() {
 
       // Redirect to intended page or dashboard
       const targetUrl = redirectUrl || "/dashboard";
-      console.log("[Login] User authenticated, redirecting to:", targetUrl);
+      console.log("[Login] User authenticated (via email/password or Google redirect), redirecting to:", targetUrl);
       router.replace(targetUrl);
     }
   }, [user, authLoading, router, redirectUrl, action]);
 
-  // Check for Google redirect result when page loads (fallback if AuthProvider doesn't handle it)
-  // This handles the redirect callback after user signs in with Google
-  // Important: getRedirectResult can only be called once per redirect, and only when there's actually a redirect result
-  // NOTE: AuthProvider also handles redirect results globally, so this is a fallback
-  useEffect(() => {
-    let mounted = true;
-    
-    async function handleRedirectResult() {
-      // Small delay to ensure Firebase is fully initialized
-      await new Promise(resolve => setTimeout(resolve, 200));
-      
-      if (!mounted) return;
-      
-      setLoading(true);
-      console.log("[Login] Checking for Google redirect result...");
-      console.log("[Login] Current URL:", window.location.href);
-      console.log("[Login] URL search params:", window.location.search);
-      
-      try {
-        const result = await getGoogleRedirectResult();
-        
-        if (!mounted) return;
-        
-        if (result && result.user) {
-          console.log("[Login] ✅ Google sign-in successful!", {
-            uid: result.user.uid,
-            email: result.user.email,
-            displayName: result.user.displayName,
-          });
-          
-          // User signed in via Google redirect
-          const user = result.user;
-          
-          // Create or update user profile in Firestore
-          try {
-            console.log("[Login] Saving user profile to Firestore...");
-            await saveUserProfile(user.uid, {
-              name: user.displayName || user.email?.split("@")[0] || "User",
-              phone: undefined, // Google doesn't provide phone number
-              email: user.email || "",
-            });
-            console.log("[Login] ✅ Profile saved successfully");
-            
-            // Store callback info if action was specified
-            if (action) {
-              sessionStorage.setItem("authCallback", JSON.stringify({ action, callback: "pending" }));
-            }
-            
-            // Redirect to intended page or dashboard
-            const targetUrl = redirectUrl || "/dashboard";
-            console.log("[Login] Redirecting to:", targetUrl);
-            router.replace(targetUrl);
-          } catch (profileError: any) {
-            console.error("[Login] ❌ Failed to save profile:", profileError);
-            console.error("[Login] Profile error details:", {
-              code: profileError?.code,
-              message: profileError?.message,
-              stack: profileError?.stack,
-            });
-            setError(t("Failed to save profile. Please try again.", "فشل حفظ الملف الشخصي. يرجى المحاولة مرة أخرى."));
-            setLoading(false);
-            return;
-          }
-        } else {
-          console.log("[Login] ℹ️ No redirect result (normal if not returning from Google sign-in)");
-          setLoading(false);
-        }
-      } catch (err: any) {
-        if (!mounted) return;
-        console.error("[Login] ❌ Google redirect error:", err);
-        console.error("[Login] Error details:", {
-          code: err?.code,
-          message: err?.message,
-          stack: err?.stack,
-        });
-        setError(mapFirebaseError(err?.code || ""));
-        setLoading(false);
-      }
-    }
-    
-    handleRedirectResult();
-    
-    return () => {
-      mounted = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Note: Google redirect results are handled centrally by AuthProvider in auth-context.tsx
+  // The useAuth hook will update the user state once the redirect is processed
+  // We just need to wait for auth state and redirect accordingly
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

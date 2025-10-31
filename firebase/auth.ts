@@ -56,9 +56,37 @@ export async function signInWithGoogle() {
     throw new Error("signInWithGoogle can only be called in the browser");
   }
   
-  const auth = initializeFirebaseAuth();
+  // Check Firebase configuration first
+  if (!isFirebaseConfigured()) {
+    const missingVars = [
+      !process.env.NEXT_PUBLIC_FIREBASE_API_KEY && "NEXT_PUBLIC_FIREBASE_API_KEY",
+      !process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN && "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN",
+      !process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID && "NEXT_PUBLIC_FIREBASE_PROJECT_ID",
+      !process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET && "NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET",
+      !process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID && "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID",
+      !process.env.NEXT_PUBLIC_FIREBASE_APP_ID && "NEXT_PUBLIC_FIREBASE_APP_ID",
+    ].filter(Boolean);
+    
+    throw new Error(
+      `Firebase is not configured. Missing environment variables: ${missingVars.join(", ")}. ` +
+      `Please add these to your .env.local file. See ENV_EXAMPLE.txt for reference.`
+    );
+  }
+  
+  let auth = initializeFirebaseAuth();
   if (!auth) {
-    throw new Error("Firebase is not configured. Please check your environment variables.");
+    // This shouldn't happen if isFirebaseConfigured() is true, but handle gracefully
+    // Try to initialize directly if the cached instance is missing
+    try {
+      const app = getFirebaseApp();
+      authInstance = getAuth(app);
+      auth = authInstance;
+    } catch (error: any) {
+      throw new Error(
+        `Failed to initialize Firebase Auth: ${error?.message || "Unknown error"}. ` +
+        `Please check your Firebase configuration in .env.local.`
+      );
+    }
   }
   const provider = new GoogleAuthProvider();
   // Optional: Add additional scopes if needed (e.g., profile, email)

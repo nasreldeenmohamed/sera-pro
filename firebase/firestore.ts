@@ -171,6 +171,7 @@ export type CvDraftData = {
   languages: string[];
   certifications: string[];
   templateKey: string;
+  cvLanguage: "ar" | "en"; // Language of the CV content (not the UI locale)
   updatedAt?: any; // Firestore Timestamp
   createdAt?: any; // Firestore Timestamp
 };

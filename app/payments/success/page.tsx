@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useAuth } from "@/lib/auth-context";
 import { useLocale } from "@/lib/locale-context";
+import { SiteLayout } from "@/components/layout/SiteLayout";
 import { CheckCircle2, Loader2, XCircle } from "lucide-react";
 
 type Product = "one_time" | "flex_pack" | "annual_pass";
@@ -94,7 +95,8 @@ export default function PaymentSuccessPage() {
   })();
 
   return (
-    <div className="container mx-auto max-w-2xl px-4 py-12">
+    <SiteLayout>
+      <div className="container mx-auto max-w-2xl px-4 py-12">
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -151,7 +153,8 @@ export default function PaymentSuccessPage() {
           </div>
         </CardContent>
       </Card>
-    </div>
+      </div>
+    </SiteLayout>
   );
 }
 

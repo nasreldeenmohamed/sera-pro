@@ -2,13 +2,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { listUserCvs, deleteUserCv, getUserPlan, type UserCv, type UserPlan } from "@/firebase/firestore";
+import { listUserCvs, deleteUserCv, getUserPlan, getUserProfile, type UserCv, type UserPlan } from "@/firebase/firestore";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { useLocale } from "@/lib/locale-context";
-import { PurchaseButton } from "@/components/payments/PurchaseButtons";
+import { PlanCards } from "@/components/payments/PlanCards";
+import { KashierPaymentModal } from "@/components/payments/KashierPaymentModal";
 import { SiteLayout } from "@/components/layout/SiteLayout";
+import { CheckCircle2, Zap, Star, Crown, Info } from "lucide-react";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -18,6 +21,11 @@ export default function DashboardPage() {
   const [cvs, setCvs] = useState<UserCv[]>([]);
   const [plan, setPlan] = useState<UserPlan | null>(null);
   const [busy, setBusy] = useState(false);
+  const [userProfile, setUserProfile] = useState<{ email?: string; name?: string } | null>(null);
+  
+  // Payment modal state
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<"one_time" | "flex_pack" | "annual_pass" | null>(null);
 
   useEffect(() => {
     if (!loading && !user) router.replace("/auth/login");
@@ -27,15 +35,38 @@ export default function DashboardPage() {
     async function load() {
       if (!user) return;
       try {
-        const [items, p] = await Promise.all([listUserCvs(user.uid), getUserPlan(user.uid)]);
+        const [items, p, profile] = await Promise.all([
+          listUserCvs(user.uid),
+          getUserPlan(user.uid),
+          getUserProfile(user.uid).catch(() => null), // Profile might not exist
+        ]);
         setCvs(items);
         setPlan(p);
+        setUserProfile(profile || { email: user.email || undefined, name: user.displayName || undefined });
       } catch (e) {
-        // TODO(error): surface error state
+        console.error("Failed to load dashboard data:", e);
+        // TODO(error): surface error state to user
       }
     }
     load();
   }, [user]);
+
+  // Refresh plan after successful payment
+  const handlePaymentSuccess = async () => {
+    if (!user) return;
+    try {
+      const updatedPlan = await getUserPlan(user.uid);
+      setPlan(updatedPlan);
+    } catch (e) {
+      console.error("Failed to refresh plan after payment:", e);
+    }
+  };
+
+  // Handle plan purchase
+  const handlePurchase = (product: "one_time" | "flex_pack" | "annual_pass") => {
+    setSelectedProduct(product);
+    setPaymentModalOpen(true);
+  };
 
   async function onDelete(cvId: string) {
     if (!user) return;
@@ -85,37 +116,106 @@ export default function DashboardPage() {
           <h1 className="text-2xl font-semibold">{t("Your Dashboard", "لوحتك")}</h1>
         </header>
 
-        {/* Plan summary */}
-        <Alert className="mb-6">
-          <AlertTitle>{t("Current Plan", "الخطة الحالية")}: {planBadge}</AlertTitle>
-          <AlertDescription>
-            {/* TODO(access): Populate from Firestore plan doc once payment flows write these fields */}
-            {plan?.planType === "flex_pack" && (
-              <span>{t("Credits left", "الرصيد المتبقي")}: {plan.credits ?? 0} {t("of", "من")} {plan.creditsTotal ?? 5}</span>
-            )}
-            {plan?.planType === "one_time" && plan.oneTimeExpiresAt && (
-              <span className="block">{t("Editing window ends", "تنتهي مهلة التعديل")}: {/* timestamp formatting later */} </span>
-            )}
-            {plan?.planType === "annual_pass" && plan.annualRenewsAt && (
-              <span className="block">{t("Renews on", "تجديد في")}: {/* date formatting later */}</span>
-            )}
-          </AlertDescription>
-        </Alert>
+        {/* Enhanced Plan Summary */}
+        <Card className="mb-6 border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/20">
+          <CardHeader>
+            <div className="flex items-center justify-between flex-wrap gap-4">
+              <div className="flex items-center gap-3">
+                {plan?.planType === "free" && <Zap className="h-5 w-5 text-zinc-600" />}
+                {plan?.planType === "one_time" && <Star className="h-5 w-5 text-blue-600" />}
+                {plan?.planType === "flex_pack" && <Star className="h-5 w-5 text-yellow-600" />}
+                {plan?.planType === "annual_pass" && <Crown className="h-5 w-5 text-purple-600" />}
+                <div>
+                  <CardTitle className="text-lg">
+                    {t("Current Plan", "الخطة الحالية")}: <Badge variant="secondary">{planBadge}</Badge>
+                  </CardTitle>
+                  <div className="mt-2 space-y-1">
+                    {!plan || plan.planType === "free" ? (
+                      <div className="text-sm text-zinc-600 dark:text-zinc-400">
+                        <p>• {t("1 basic CV with watermark", "سيرة أساسية واحدة مع علامة مائية")}</p>
+                        <p>• {t("Limited templates", "قوالب محدودة")}</p>
+                        <p>• {t("Basic features", "ميزات أساسية")}</p>
+                      </div>
+                    ) : plan.planType === "one_time" ? (
+                      <div className="text-sm text-zinc-600 dark:text-zinc-400">
+                        <p>• {t("1 AI-enhanced CV", "سيرة واحدة محسّنة بالذكاء الاصطناعي")}</p>
+                        <p>• {t("All premium templates", "جميع القوالب المميزة")}</p>
+                        <p>• {t("14 days editing access", "الوصول للتعديل لمدة 14 يومًا")}</p>
+                        <p>• {t("No watermark PDFs", "ملفات PDF بدون علامة مائية")}</p>
+                      </div>
+                    ) : plan.planType === "flex_pack" ? (
+                      <div className="text-sm text-zinc-600 dark:text-zinc-400">
+                        <p>• {t("Credits remaining", "الرصيد المتبقي")}: <strong>{plan.creditsRemaining ?? 0} / 5</strong></p>
+                        <p>• {t("All premium templates", "جميع القوالب المميزة")}</p>
+                        <p>• {t("AI enhancement included", "التحسين بالذكاء الاصطناعي متضمن")}</p>
+                        <p>• {t("Valid for 6 months", "صالح لمدة 6 أشهر")}</p>
+                      </div>
+                    ) : (
+                      <div className="text-sm text-zinc-600 dark:text-zinc-400">
+                        <p>• {t("Unlimited CVs", "سير غير محدودة")}</p>
+                        <p>• {t("All premium templates + future templates", "جميع القوالب المميزة + القوالب المستقبلية")}</p>
+                        <p>• {t("Priority AI enhancement", "أولوية في التحسين بالذكاء الاصطناعي")}</p>
+                        <p>• {t("Advanced export options", "خيارات تصدير متقدمة")}</p>
+                        <p>• {t("Priority support", "دعم ذو أولوية")}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+              {(!plan || plan.planType === "free") && (
+                <Badge variant="outline" className="text-xs">
+                  {t("Upgrade to unlock more", "قم بالترقية لفتح المزيد")}
+                </Badge>
+              )}
+            </div>
+          </CardHeader>
+        </Card>
 
         {/* Actions */}
         <div className="mb-6 flex flex-col gap-3 sm:flex-row">
-          {/* TODO(gating): Disable when user lacks credits/access */}
-          <Button disabled={!canCreate} onClick={() => router.push("/create-cv")} className="text-white" style={{ backgroundColor: "#0d47a1" }}>{t("Create New CV", "إنشاء سيرة جديدة")}</Button>
-          {/* TODO(payment): Open pricing modal or go to pricing page */}
-          <Button variant="secondary" onClick={() => router.push("/pricing")}>{t("Buy Packages", "شراء باقات")}</Button>
+          <Button 
+            disabled={!canCreate} 
+            onClick={() => router.push("/create-cv")} 
+            className="text-white" 
+            style={{ backgroundColor: "#0d47a1" }}
+          >
+            {t("Create New CV", "إنشاء سيرة جديدة")}
+          </Button>
         </div>
 
-        {/* Quick purchase options */}
-        <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <PurchaseButton product="one_time" />
-          <PurchaseButton product="flex_pack" />
-          <PurchaseButton product="annual_pass" />
+        {/* Enhanced Plan Cards with Purchase Options */}
+        <div className="mb-8">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-xl font-semibold">{t("Upgrade Your Plan", "قم بترقية خطتك")}</h2>
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+              {t("Choose the plan that works best for you", "اختر الخطة التي تناسبك")}
+            </p>
+          </div>
+          <PlanCards currentPlan={plan} onPurchase={handlePurchase} />
         </div>
+
+        {/* Payment Modal */}
+        {selectedProduct && user && (
+          <KashierPaymentModal
+            open={paymentModalOpen}
+            onClose={() => {
+              setPaymentModalOpen(false);
+              setSelectedProduct(null);
+            }}
+            product={selectedProduct}
+            amount={
+              selectedProduct === "one_time"
+                ? 79
+                : selectedProduct === "flex_pack"
+                ? 149
+                : 299
+            }
+            userId={user.uid}
+            userEmail={userProfile?.email || user.email || undefined}
+            userName={userProfile?.name || user.displayName || undefined}
+            onSuccess={handlePaymentSuccess}
+          />
+        )}
 
         {/* CVs grid */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

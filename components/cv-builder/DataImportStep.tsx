@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useLocale } from "@/lib/locale-context";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -44,67 +45,35 @@ export function DataImportStep({ onImport, onNext, onSkip }: DataImportStepProps
   const { isAr, t } = useLocale();
 
   // LinkedIn import state
-  const [linkedInUrl, setLinkedInUrl] = useState("");
   const [linkedInLoading, setLinkedInLoading] = useState(false);
   const [linkedInError, setLinkedInError] = useState<string | null>(null);
   const [linkedInSuccess, setLinkedInSuccess] = useState(false);
-  const [linkedInInstructions, setLinkedInInstructions] = useState<string[]>([]);
+  const [showInstructions, setShowInstructions] = useState(false);
 
   // File upload state
   const [fileLoading, setFileLoading] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
   const [fileSuccess, setFileSuccess] = useState(false);
 
-  // Handle LinkedIn URL import
-  async function handleLinkedInUrl() {
-    if (!linkedInUrl.trim()) {
-      setLinkedInError(t("Please enter a LinkedIn profile URL.", "يرجى إدخال رابط ملف LinkedIn الشخصي."));
-      return;
-    }
-
-    setLinkedInLoading(true);
-    setLinkedInError(null);
-    setLinkedInSuccess(false);
-    setLinkedInInstructions([]);
-
-    try {
-      const formData = new FormData();
-      formData.append("url", linkedInUrl);
-
-      const res = await fetch("/api/linkedin/import", {
-        method: "POST",
-        body: formData,
-      });
-
-      const json = await res.json();
-
-      if (!res.ok) {
-        if (json.fallback && json.fallback.steps && Array.isArray(json.fallback.steps)) {
-          setLinkedInInstructions(json.fallback.steps);
-          setLinkedInError(
-            t(
-              "Direct URL import is not available. Please use the JSON file upload method instead.",
-              "استيراد الرابط المباشر غير متاح. يرجى استخدام طريقة تحميل ملف JSON بدلاً من ذلك."
-            )
-          );
-          setLinkedInLoading(false);
-          return;
-        }
-        throw new Error(json.error || t("Failed to import LinkedIn data.", "فشل استيراد بيانات LinkedIn."));
-      }
-
-      if (json.success && json.data) {
-        onImport(json.data);
-        setLinkedInSuccess(true);
-        setLinkedInUrl("");
-      }
-    } catch (error: any) {
-      console.error("LinkedIn import error:", error);
-      setLinkedInError(error.message || t("Failed to import LinkedIn data.", "فشل استيراد بيانات LinkedIn."));
-    } finally {
-      setLinkedInLoading(false);
-    }
-  }
+  // LinkedIn export instructions (localized)
+  const exportInstructions = {
+    en: [
+      "Go to LinkedIn Settings & Privacy",
+      "Click 'Get a copy of your data'",
+      "Select 'Want something in particular? Select the data files you're most interested in.'",
+      "Check 'Profile' and 'Positions', then request archive",
+      "Download and extract the ZIP file when LinkedIn emails it",
+      "Upload the Profile.json file here"
+    ],
+    ar: [
+      "انتقل إلى إعدادات LinkedIn والخصوصية",
+      "انقر على 'احصل على نسخة من بياناتك'",
+      "اختر 'هل تريد شيئًا معينًا؟ اختر ملفات البيانات التي تهتم بها أكثر.'",
+      "حدد 'الملف الشخصي' و'المناصب'، ثم اطلب الأرشيف",
+      "قم بتنزيل واستخراج ملف ZIP عندما ترسله LinkedIn عبر البريد الإلكتروني",
+      "قم بتحميل ملف Profile.json هنا"
+    ]
+  };
 
   // Handle LinkedIn JSON file upload
   async function handleLinkedInFile(event: React.ChangeEvent<HTMLInputElement>) {
@@ -121,7 +90,6 @@ export function DataImportStep({ onImport, onNext, onSkip }: DataImportStepProps
     setLinkedInLoading(true);
     setLinkedInError(null);
     setLinkedInSuccess(false);
-    setLinkedInInstructions([]);
 
     try {
       const formData = new FormData();
@@ -213,7 +181,7 @@ export function DataImportStep({ onImport, onNext, onSkip }: DataImportStepProps
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" dir={isAr ? "rtl" : "ltr"}>
       <div className="text-center mb-8">
         <h2 className="text-2xl font-semibold mb-2">
           {t("Import Your CV Data", "استيراد بيانات سيرتك الذاتية")}
@@ -228,57 +196,18 @@ export function DataImportStep({ onImport, onNext, onSkip }: DataImportStepProps
 
       <Tabs defaultValue="linkedin" className="w-full">
         <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="linkedin">
-            <Linkedin className="h-4 w-4 mr-2" />
+          <TabsTrigger value="linkedin" className={isAr ? "flex-row-reverse" : ""}>
+            <Linkedin className={`h-4 w-4 ${isAr ? "ml-2" : "mr-2"}`} />
             {t("LinkedIn", "LinkedIn")}
           </TabsTrigger>
-          <TabsTrigger value="file">
-            <FileText className="h-4 w-4 mr-2" />
+          <TabsTrigger value="file" className={isAr ? "flex-row-reverse" : ""}>
+            <FileText className={`h-4 w-4 ${isAr ? "ml-2" : "mr-2"}`} />
             {t("CV File", "ملف السيرة")}
           </TabsTrigger>
         </TabsList>
 
         {/* LinkedIn Import Tab */}
         <TabsContent value="linkedin" className="space-y-4 mt-6">
-          {/* LinkedIn URL Input */}
-          <div className="space-y-2">
-            <Label>{t("LinkedIn Profile URL", "رابط ملف LinkedIn الشخصي")}</Label>
-            <div className="flex gap-2">
-              <Input
-                type="url"
-                placeholder={t("https://www.linkedin.com/in/username", "https://www.linkedin.com/in/username")}
-                value={linkedInUrl}
-                onChange={(e) => setLinkedInUrl(e.target.value)}
-                disabled={linkedInLoading || linkedInSuccess}
-              />
-              <Button
-                onClick={handleLinkedInUrl}
-                disabled={linkedInLoading || linkedInSuccess || !linkedInUrl.trim()}
-                className="text-white"
-                style={{ backgroundColor: "#0d47a1" }}
-              >
-                {linkedInLoading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    {t("Importing...", "جارٍ الاستيراد...")}
-                  </>
-                ) : (
-                  <>
-                    <ExternalLink className="h-4 w-4 mr-2" />
-                    {t("Import", "استيراد")}
-                  </>
-                )}
-              </Button>
-            </div>
-          </div>
-
-          {/* Divider */}
-          <div className="flex items-center gap-4 my-6">
-            <div className="flex-1 h-px bg-zinc-200 dark:bg-zinc-700" />
-            <span className="text-sm text-zinc-500">{t("OR", "أو")}</span>
-            <div className="flex-1 h-px bg-zinc-200 dark:bg-zinc-700" />
-          </div>
-
           {/* LinkedIn JSON File Upload */}
           <div className="space-y-2">
             <Label>{t("Upload LinkedIn Data Export (JSON)", "تحميل تصدير بيانات LinkedIn (JSON)")}</Label>
@@ -299,20 +228,48 @@ export function DataImportStep({ onImport, onNext, onSkip }: DataImportStepProps
               />
               <Button
                 variant="link"
-                asChild
+                onClick={() => setShowInstructions(!showInstructions)}
                 className="text-xs mt-2"
               >
-                <a
-                  href="https://www.linkedin.com/help/linkedin/answer/a554590/download-your-linkedin-data"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1"
-                >
-                  {t("How to export LinkedIn data?", "كيفية تصدير بيانات LinkedIn؟")}
-                  <ExternalLink className="h-3 w-3" />
-                </a>
+                {showInstructions 
+                  ? t("Hide instructions", "إخفاء التعليمات")
+                  : t("How to export LinkedIn data?", "كيفية تصدير بيانات LinkedIn؟")
+                }
+                <ExternalLink className={`h-3 w-3 ${isAr ? "mr-1" : "ml-1"}`} />
               </Button>
             </div>
+
+            {/* Export Instructions */}
+            {showInstructions && (
+              <Alert className="mt-4">
+                <Info className="h-4 w-4" />
+                <AlertDescription>
+                  <div className="space-y-3">
+                    <p className="font-semibold">{t("How to export LinkedIn data:", "كيفية تصدير بيانات LinkedIn:")}</p>
+                    <ol className={cn("space-y-2 text-sm", isAr ? "list-decimal list-inside mr-4" : "list-decimal list-inside ml-4")}>
+                      {exportInstructions[isAr ? "ar" : "en"].map((step, idx) => (
+                        <li key={idx} className="leading-relaxed">{step}</li>
+                      ))}
+                    </ol>
+                    <Button
+                      variant="link"
+                      asChild
+                      className="text-xs p-0 h-auto"
+                    >
+                      <a
+                        href="https://www.linkedin.com/help/linkedin/answer/a554590/download-your-linkedin-data"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1"
+                      >
+                        {t("Read more on LinkedIn Help", "اقرأ المزيد في مساعدة LinkedIn")}
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    </Button>
+                  </div>
+                </AlertDescription>
+              </Alert>
+            )}
           </div>
 
           {/* LinkedIn Import Status */}
@@ -341,23 +298,6 @@ export function DataImportStep({ onImport, onNext, onSkip }: DataImportStepProps
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>{linkedInError}</AlertDescription>
-            </Alert>
-          )}
-
-          {/* Instructions for LinkedIn URL import */}
-          {linkedInInstructions.length > 0 && (
-            <Alert>
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                <div className="space-y-2">
-                  <p className="font-semibold">{t("How to export LinkedIn data:", "كيفية تصدير بيانات LinkedIn:")}</p>
-                  <ol className="list-decimal list-inside space-y-1 text-sm">
-                    {linkedInInstructions.map((step, idx) => (
-                      <li key={idx}>{step}</li>
-                    ))}
-                  </ol>
-                </div>
-              </AlertDescription>
             </Alert>
           )}
         </TabsContent>
@@ -429,16 +369,20 @@ export function DataImportStep({ onImport, onNext, onSkip }: DataImportStepProps
       </Tabs>
 
       {/* Navigation */}
-      <div className="flex justify-between items-center pt-4">
+      <div className={`flex justify-between items-center pt-4 ${isAr ? "flex-row-reverse" : ""}`}>
         <Button variant="ghost" onClick={onSkip}>
           {t("Skip Import", "تخطي الاستيراد")}
         </Button>
         <Button
           onClick={onNext}
-          className="text-white ml-auto"
+          className={`text-white ${isAr ? "mr-auto flex-row-reverse" : "ml-auto"}`}
           style={{ backgroundColor: "#0d47a1" }}
         >
-          {t("Continue", "متابعة")} →
+          {isAr ? (
+            <>← {t("Continue", "متابعة")}</>
+          ) : (
+            <>{t("Continue", "متابعة")} →</>
+          )}
         </Button>
       </div>
     </div>

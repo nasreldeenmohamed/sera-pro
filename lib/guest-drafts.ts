@@ -45,6 +45,7 @@ export type GuestDraftData = {
   languages: string[];
   certifications: string[];
   templateKey: string;
+  cvLanguage: "ar" | "en"; // Language of the CV content (not the UI locale)
 };
 
 /**
