@@ -1,14 +1,14 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { listUserCvs, deleteUserCv, getUserPlan, getUserProfile, getUserDraft, getUserCv, type UserCv, type UserPlan, type CvDraftData } from "@/firebase/firestore";
+import { listUserCvs, deleteUserCv, getUserPlan, getUserDraft, getUserCv, type UserCv, type UserPlan, type CvDraftData } from "@/firebase/firestore";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useLocale } from "@/lib/locale-context";
 import { SiteLayout } from "@/components/layout/SiteLayout";
-import { Zap, Star, Crown } from "lucide-react";
+import { Zap, Star, Crown, FileText } from "lucide-react";
 import { ClassicTemplate } from "@/components/pdf/Templates";
 import { downloadPdf } from "@/lib/pdf";
 import { CvPreviewCard } from "@/components/dashboard/CvPreviewCard";
@@ -34,54 +34,103 @@ export default function DashboardPage() {
   const { user, loading } = useAuth();
   const { isAr, t } = useLocale();
 
+  // CV data state - fetched from Firestore on page load
   const [cvs, setCvs] = useState<UserCv[]>([]);
+  const [cvsLoading, setCvsLoading] = useState<boolean>(true);
+  const [cvsError, setCvsError] = useState<string | null>(null);
+  
+  // Plan and user profile state
   const [plan, setPlan] = useState<UserPlan | null>(null);
+  const [planLoading, setPlanLoading] = useState<boolean>(true);
+  
+  // UI state
   const [busy, setBusy] = useState(false);
-  const [userProfile, setUserProfile] = useState<{ email?: string; name?: string } | null>(null);
-  const [hasDraft, setHasDraft] = useState<boolean>(false);
-  const [cameFromCreateCv, setCameFromCreateCv] = useState<boolean>(false);
 
   useEffect(() => {
     if (!loading && !user) router.replace("/auth/login");
   }, [loading, user, router]);
 
-  // Check if user came from /create-cv page
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const referrer = document.referrer;
-      const fromCreateCv = referrer.includes("/create-cv");
-      setCameFromCreateCv(fromCreateCv);
-      
-      // Also check sessionStorage for navigation tracking
-      const navFromCreateCv = sessionStorage.getItem("navigated_from_create_cv") === "true";
-      if (navFromCreateCv) {
-        setCameFromCreateCv(true);
-        // Clear the flag after reading
-        sessionStorage.removeItem("navigated_from_create_cv");
-      }
+  /**
+   * Asynchronously fetch all CVs from Firestore for the authenticated user
+   * Called on page load, when user changes, and when page becomes visible
+   * Ensures data is always up-to-date, even after editing from other devices
+   * 
+   * Uses authenticated user's ID as the Firestore query key
+   */
+  const fetchCvs = useCallback(async () => {
+    if (!user) {
+      setCvsLoading(false);
+      return;
     }
-  }, []);
 
+    setCvsLoading(true);
+    setCvsError(null);
+
+    try {
+      // Fetch CVs using authenticated user's ID as query key
+      // Firestore query: collection("cvDrafts").where("userId", "==", user.uid)
+      const items = await listUserCvs(user.uid);
+      setCvs(items);
+    } catch (error: any) {
+      console.error("[Dashboard] Failed to fetch CVs from Firestore:", error);
+      const errorMessage = error?.message || t(
+        "Failed to load CVs. Please refresh the page.",
+        "فشل تحميل السير. يرجى تحديث الصفحة."
+      );
+      setCvsError(errorMessage);
+    } finally {
+      setCvsLoading(false);
+    }
+  }, [user, t]);
+
+  // Fetch CVs on page load and when user changes
   useEffect(() => {
-    async function load() {
-      if (!user) return;
+    fetchCvs();
+  }, [fetchCvs]);
+
+  // Refresh CVs when page becomes visible (user returns from another tab/page)
+  // Ensures data stays synchronized across devices and browser tabs
+  useEffect(() => {
+    if (typeof window === "undefined" || !user) return;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible" && user) {
+        // Refetch when page becomes visible to ensure data is fresh
+        fetchCvs();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [user, fetchCvs]);
+
+  /**
+   * Asynchronously fetch user plan from Firestore
+   * Separate from CV fetch to allow independent loading states
+   */
+  useEffect(() => {
+    async function fetchPlan() {
+      if (!user) {
+        setPlanLoading(false);
+        return;
+      }
+
+      setPlanLoading(true);
       try {
-        const [items, p, profile, draft] = await Promise.all([
-          listUserCvs(user.uid),
-          getUserPlan(user.uid),
-          getUserProfile(user.uid).catch(() => null), // Profile might not exist
-          getUserDraft(user.uid).catch(() => null), // Draft might not exist
-        ]);
-        setCvs(items);
+        const p = await getUserPlan(user.uid);
         setPlan(p);
-        setUserProfile(profile || { email: user.email || undefined, name: user.displayName || undefined });
-        setHasDraft(!!draft);
-      } catch (e) {
-        console.error("Failed to load dashboard data:", e);
-        // TODO(error): surface error state to user
+      } catch (error: any) {
+        console.error("[Dashboard] Failed to fetch plan:", error);
+        // Plan fetch failure is non-critical - user can still use dashboard
+        setPlan(null);
+      } finally {
+        setPlanLoading(false);
       }
     }
-    load();
+
+    fetchPlan();
   }, [user]);
 
   // Determine if user should see watermark on downloads
@@ -99,12 +148,25 @@ export default function DashboardPage() {
     return cvs;
   }, [cvs, plan]);
 
+  /**
+   * Delete a CV and refresh the list from Firestore
+   * After deletion, refetch to ensure data consistency across devices
+   */
+  /**
+   * Delete a CV and refresh the list from Firestore
+   * Note: Confirmation is handled by CvPreviewCard component
+   */
   async function onDelete(cvId: string) {
     if (!user) return;
+
     setBusy(true);
     try {
       await deleteUserCv(user.uid, cvId);
-      setCvs((prev) => prev.filter((c) => c.id !== cvId));
+      // Refetch CVs from Firestore to ensure data consistency
+      await fetchCvs();
+    } catch (error: any) {
+      console.error("[Dashboard] Failed to delete CV:", error);
+      alert(t("Failed to delete CV. Please try again.", "فشل حذف السيرة. يرجى المحاولة مرة أخرى."));
     } finally {
       setBusy(false);
     }
@@ -222,11 +284,14 @@ export default function DashboardPage() {
     return true;
   }, [plan]);
 
+  // Show loading state while authenticating
   if (loading || !user) {
     return (
       <SiteLayout>
         <section className="mx-auto max-w-6xl p-6 sm:p-8 md:p-12">
-          <p className="text-zinc-600 dark:text-zinc-400">{t("Loading...", "جارٍ التحميل...")}</p>
+          <div className="flex items-center justify-center py-12">
+            <p className="text-zinc-600 dark:text-zinc-400">{t("Loading...", "جارٍ التحميل...")}</p>
+          </div>
         </section>
       </SiteLayout>
     );
@@ -284,11 +349,11 @@ export default function DashboardPage() {
           </Button>
         </div>
 
-        {/* CVs List - Filtered by plan */}
+        {/* CVs List - Fetched from Firestore, filtered by plan */}
         <div className="mb-8">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-xl font-semibold">{t("Your CVs", "سيرك الذاتية")}</h2>
-            {visibleCvs.length > 0 && (
+            {!cvsLoading && !cvsError && visibleCvs.length > 0 && (
               <p className="text-sm text-zinc-600 dark:text-zinc-400">
                 {visibleCvs.length === 1 
                   ? t("1 CV", "سيرة واحدة")
@@ -298,20 +363,65 @@ export default function DashboardPage() {
             )}
           </div>
 
-          {visibleCvs.length === 0 ? (
+          {/* Loading State */}
+          {cvsLoading && (
             <Card className="p-8 text-center">
-              <p className="text-zinc-600 dark:text-zinc-400 mb-4">
-                {t("No CVs yet. Create your first CV.", "لا توجد سير بعد. ابدأ بإنشاء سيرتك الأولى.")}
+              <div className="flex flex-col items-center gap-3">
+                <div className="h-8 w-8 animate-spin rounded-full border-4 border-zinc-300 border-t-zinc-600 dark:border-zinc-700 dark:border-t-zinc-400" />
+                <p className="text-zinc-600 dark:text-zinc-400">
+                  {t("Loading your CVs...", "جارٍ تحميل سيرك...")}
+                </p>
+              </div>
+            </Card>
+          )}
+
+          {/* Error State */}
+          {!cvsLoading && cvsError && (
+            <Card className="p-8 text-center border-red-200 dark:border-red-800 bg-red-50/50 dark:bg-red-950/20">
+              <p className="text-red-600 dark:text-red-400 mb-4">
+                {cvsError}
               </p>
-              <Button 
-                onClick={() => router.push("/create-cv")} 
-                className="text-white"
-                style={{ backgroundColor: "#0d47a1" }}
+              <Button
+                onClick={fetchCvs}
+                variant="outline"
               >
-                {t("Create Your First CV", "إنشاء سيرتك الأولى")}
+                {t("Retry", "إعادة المحاولة")}
               </Button>
             </Card>
-          ) : (
+          )}
+
+          {/* Empty State - No CVs found */}
+          {!cvsLoading && !cvsError && visibleCvs.length === 0 && (
+            <Card className="p-8 text-center">
+              <div className="max-w-md mx-auto space-y-4">
+                <div className="h-16 w-16 mx-auto rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
+                  <FileText className="h-8 w-8 text-zinc-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold mb-2">
+                    {t("No CVs yet", "لا توجد سير بعد")}
+                  </h3>
+                  <p className="text-zinc-600 dark:text-zinc-400 mb-6">
+                    {t(
+                      "Create your first professional CV and start your job search journey.",
+                      "أنشئ سيرتك الذاتية الأولى وابدأ رحلتك في البحث عن وظيفة."
+                    )}
+                  </p>
+                </div>
+                <Button 
+                  onClick={() => router.push("/create-cv")} 
+                  className="text-white"
+                  style={{ backgroundColor: "#0d47a1" }}
+                  size="lg"
+                >
+                  {t("Create Your First CV", "إنشاء سيرتك الأولى")}
+                </Button>
+              </div>
+            </Card>
+          )}
+
+          {/* CVs List - Success State */}
+          {!cvsLoading && !cvsError && visibleCvs.length > 0 && (
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
               {visibleCvs.map((cv) => (
                 <CvPreviewCard
