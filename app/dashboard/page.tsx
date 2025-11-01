@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { listUserCvs, deleteUserCv, getUserPlan, getUserProfile, getUserDraft, type UserCv, type UserPlan } from "@/firebase/firestore";
+import { listUserCvs, deleteUserCv, getUserPlan, getUserProfile, getUserDraft, getUserCv, type UserCv, type UserPlan, type CvDraftData } from "@/firebase/firestore";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -24,6 +24,8 @@ export default function DashboardPage() {
   const [plan, setPlan] = useState<UserPlan | null>(null);
   const [busy, setBusy] = useState(false);
   const [userProfile, setUserProfile] = useState<{ email?: string; name?: string } | null>(null);
+  const [hasDraft, setHasDraft] = useState<boolean>(false);
+  const [cameFromCreateCv, setCameFromCreateCv] = useState<boolean>(false);
   
   // Payment modal state
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
@@ -33,18 +35,37 @@ export default function DashboardPage() {
     if (!loading && !user) router.replace("/auth/login");
   }, [loading, user, router]);
 
+  // Check if user came from /create-cv page
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const referrer = document.referrer;
+      const fromCreateCv = referrer.includes("/create-cv");
+      setCameFromCreateCv(fromCreateCv);
+      
+      // Also check sessionStorage for navigation tracking
+      const navFromCreateCv = sessionStorage.getItem("navigated_from_create_cv") === "true";
+      if (navFromCreateCv) {
+        setCameFromCreateCv(true);
+        // Clear the flag after reading
+        sessionStorage.removeItem("navigated_from_create_cv");
+      }
+    }
+  }, []);
+
   useEffect(() => {
     async function load() {
       if (!user) return;
       try {
-        const [items, p, profile] = await Promise.all([
+        const [items, p, profile, draft] = await Promise.all([
           listUserCvs(user.uid),
           getUserPlan(user.uid),
           getUserProfile(user.uid).catch(() => null), // Profile might not exist
+          getUserDraft(user.uid).catch(() => null), // Draft might not exist
         ]);
         setCvs(items);
         setPlan(p);
         setUserProfile(profile || { email: user.email || undefined, name: user.displayName || undefined });
+        setHasDraft(!!draft);
       } catch (e) {
         console.error("Failed to load dashboard data:", e);
         // TODO(error): surface error state to user
@@ -81,54 +102,78 @@ export default function DashboardPage() {
     }
   }
 
-  // Download CV with watermark for free plan users
-  async function downloadCvWithWatermark(cvId: string) {
+  /**
+   * Download CV with watermark for free plan users
+   * 
+   * Supports downloading from:
+   * 1. Saved CVs (cvId provided)
+   * 2. Current draft (if exists)
+   * 3. Falls back to first CV if available
+   */
+  async function downloadCvWithWatermark(cvId?: string) {
     if (!user) return;
     setBusy(true);
     try {
-      // Fetch the full CV data from cvDrafts collection
-      // Note: The actual document has all fields, even though UserCv type is minimal
-      const { getUserCv } = await import("@/firebase/firestore");
-      const cvData = await getUserCv(user.uid, cvId);
-      
+      let cvData: CvDraftData | null = null;
+      let templateKey = "classic";
+
+      // Priority 1: Try to get draft (most recent work)
+      const draft = await getUserDraft(user.uid);
+      if (draft) {
+        cvData = draft;
+        templateKey = draft.templateKey || "classic";
+      } else if (cvId) {
+        // Priority 2: Get specific CV by ID
+        const savedCv = await getUserCv(user.uid, cvId);
+        if (savedCv) {
+          cvData = savedCv as any;
+          templateKey = (savedCv as any).templateKey || "classic";
+        }
+      } else if (cvs.length > 0) {
+        // Priority 3: Use first CV
+        const firstCv = await getUserCv(user.uid, cvs[0].id);
+        if (firstCv) {
+          cvData = firstCv as any;
+          templateKey = (firstCv as any).templateKey || "classic";
+        }
+      }
+
       if (!cvData) {
-        alert(t("CV not found.", "السيرة غير موجودة."));
+        alert(t("No CV data found. Please create or save a CV first.", "لم يتم العثور على بيانات السيرة. يرجى إنشاء أو حفظ سيرة أولاً."));
         return;
       }
 
-      // The cvData from getUserCv should have all fields (experience, education, etc.)
-      // Cast to any to access all properties beyond the minimal UserCv type
-      const fullCvData = cvData as any;
-
       // Prepare data for PDF template
       const pdfData = {
-        fullName: fullCvData.fullName || "",
-        title: fullCvData.title || "",
-        summary: fullCvData.summary || "",
+        fullName: cvData.fullName || "",
+        title: cvData.title || "",
+        summary: cvData.summary || "",
         contact: {
-          email: fullCvData.contact?.email || "",
-          phone: fullCvData.contact?.phone || "",
-          location: fullCvData.contact?.location || "",
-          website: fullCvData.contact?.website || "",
+          email: cvData.contact?.email || "",
+          phone: cvData.contact?.phone || "",
+          location: cvData.contact?.location || "",
+          website: cvData.contact?.website || "",
         },
-        experience: Array.isArray(fullCvData.experience) ? fullCvData.experience : [],
-        education: Array.isArray(fullCvData.education) ? fullCvData.education : [],
-        skills: Array.isArray(fullCvData.skills) ? fullCvData.skills : [],
-        languages: Array.isArray(fullCvData.languages) ? fullCvData.languages : [],
-        certifications: Array.isArray(fullCvData.certifications) ? fullCvData.certifications : [],
+        experience: Array.isArray(cvData.experience) ? cvData.experience : [],
+        education: Array.isArray(cvData.education) ? cvData.education : [],
+        skills: Array.isArray(cvData.skills) ? cvData.skills : [],
+        languages: Array.isArray(cvData.languages) ? cvData.languages : [],
+        certifications: Array.isArray(cvData.certifications) ? cvData.certifications : [],
+        templateKey: templateKey,
       };
 
-      // Determine if CV is in Arabic (check cvLanguage or default based on UI locale)
-      const isCvAr = fullCvData.cvLanguage === "ar" || (fullCvData.cvLanguage !== "en" && isAr);
+      // Determine if CV is in Arabic
+      const isCvAr = cvData.cvLanguage === "ar" || (cvData.cvLanguage !== "en" && isAr);
 
       // Generate PDF with watermark for free plan
       const pdfDoc = ClassicTemplate({ 
         data: pdfData, 
         isAr: isCvAr,
-        showWatermark: true // Always show watermark for free plan downloads
+        showWatermark: true, // Always show watermark for free plan downloads
+        templateKey: templateKey, // Pass template key for future template support
       });
 
-      const filename = `${fullCvData.fullName || "CV"}_${isAr ? "سيرة_ذاتية" : "Resume"}.pdf`;
+      const filename = `${cvData.fullName || "CV"}_${isAr ? "سيرة_ذاتية" : "Resume"}_${isAr ? "مع_علامة_مائية" : "Watermarked"}.pdf`;
       await downloadPdf(pdfDoc, filename);
     } catch (error) {
       console.error("Failed to download CV:", error);
@@ -226,23 +271,20 @@ export default function DashboardPage() {
                   <Badge variant="outline" className="text-xs">
                     {t("Upgrade to unlock more", "قم بالترقية لفتح المزيد")}
                   </Badge>
-                  {/* Download button for free plan users with CVs */}
-                  {cvs.length > 0 && (
+                  {/* Download button for free plan users with draft or CVs */}
+                  {(hasDraft || cameFromCreateCv || cvs.length > 0) && (
                     <Button
                       size="sm"
                       variant="secondary"
                       onClick={() => {
-                        // Download the first CV (or most recent) with watermark
-                        const cvToDownload = cvs[0];
-                        if (cvToDownload) {
-                          downloadCvWithWatermark(cvToDownload.id);
-                        }
+                        // Download draft (if exists) or first CV with watermark
+                        downloadCvWithWatermark();
                       }}
                       disabled={busy}
                       className="flex items-center gap-2"
                     >
                       <Download className="h-4 w-4" />
-                      {t("Download CV (Watermarked)", "تنزيل السيرة (مع علامة مائية)")}
+                      {t("Download PDF with Watermark", "تنزيل PDF مع علامة مائية")}
                     </Button>
                   )}
                 </div>

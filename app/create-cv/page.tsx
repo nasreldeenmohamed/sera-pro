@@ -1928,11 +1928,19 @@ function CreateCvPageContent() {
                               if (user) {
                                 // Small delay to ensure Firestore save is fully committed
                                 await new Promise(resolve => setTimeout(resolve, 500));
+                                // Set flag to indicate navigation from create-cv page
+                                if (typeof window !== "undefined") {
+                                  sessionStorage.setItem("navigated_from_create_cv", "true");
+                                }
                                 router.push("/dashboard");
                               } else {
                                 // Guest user: prompt to sign in to access dashboard
                                 setAuthModalAction("general");
                                 setPendingProtectedAction(() => () => {
+                                  // Set flag to indicate navigation from create-cv page
+                                  if (typeof window !== "undefined") {
+                                    sessionStorage.setItem("navigated_from_create_cv", "true");
+                                  }
                                   router.push("/dashboard");
                                 });
                                 setShowAuthModal(true);

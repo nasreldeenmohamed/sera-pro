@@ -13,21 +13,45 @@
 
 ## Step 2: Push Code to GitHub
 
-After creating the repository, GitHub will show you commands. Use these:
+The GitHub remote is already configured. You need to authenticate first.
+
+### Authentication Options:
+
+**Option A: Personal Access Token (Recommended)**
+
+1. Create a token at https://github.com/settings/tokens
+   - Click "Generate new token" → "Generate new token (classic)"
+   - Name: `sera-pro-push`
+   - Select scope: ✅ **repo**
+   - Click "Generate token" and **copy it immediately**
+
+2. Push with token:
+   ```bash
+   cd /Volumes/External/Companies/OptimizeWare/cv-builder
+   
+   # Push using token in URL
+   git push https://YOUR_TOKEN@github.com/nasreldeenmohamed/sera-pro.git main
+   ```
+
+**Option B: Interactive Authentication**
 
 ```bash
-# Make sure you're in the project directory
 cd /Volumes/External/Companies/OptimizeWare/cv-builder
 
-# Add GitHub as a remote (replace YOUR_USERNAME with your GitHub username)
-git remote add github https://github.com/YOUR_USERNAME/sera-pro.git
+# This will prompt for credentials
+git push github main
+# Username: nasreldeenmohamed
+# Password: [paste your Personal Access Token, NOT your GitHub password]
+```
 
-# Verify remotes (you should see both 'origin' for Bitbucket and 'github' for GitHub)
-git remote -v
+**Option C: GitHub CLI (if installed)**
 
-# Push to GitHub main branch
+```bash
+gh auth login
 git push github main
 ```
+
+**Note:** If you get authentication errors, see `PUSH_TO_GITHUB.md` for detailed instructions.
 
 ## Step 3: Verify Repository is Public
 

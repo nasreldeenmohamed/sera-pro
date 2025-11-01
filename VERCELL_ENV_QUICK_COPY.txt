@@ -1,0 +1,36 @@
+ENVIRONMENT VARIABLES FOR VERCEL
+================================
+
+Copy these 11 variables and their VALUES from your .env.local file:
+
+FIREBASE (7 variables):
+-----------------------
+NEXT_PUBLIC_FIREBASE_API_KEY
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+NEXT_PUBLIC_FIREBASE_PROJECT_ID
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+NEXT_PUBLIC_FIREBASE_APP_ID
+NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
+
+KASHIER (3 variables):
+----------------------
+KASHIER_MERCHANT_ID
+KASHIER_SECRET_KEY
+KASHIER_MODE=test
+
+ANTHROPIC (1 variable):
+-----------------------
+ANTHROPIC_API_KEY
+
+TOTAL: 11 environment variables
+
+HOW TO ADD:
+-----------
+1. Open .env.local file on your computer
+2. Copy the VALUE (right side of =) for each variable above
+3. In Vercel: Settings → Environment Variables → Add New
+4. Paste Key and Value for each
+5. Select all environments (Production, Preview, Development)
+6. Save and Redeploy
+
