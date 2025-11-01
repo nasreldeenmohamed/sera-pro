@@ -1,5 +1,5 @@
-"use client";
-import { useEffect, useState } from "react";
+import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
@@ -15,44 +15,47 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export default function RootLayout({
+export const metadata: Metadata = {
+  // App name reflects bilingual brand
+  title: "Sera Pro - سيرة برو",
+  description: "AI-powered Arabic-English CV builder with RTL support",
+};
+
+// Enable dynamic rendering to allow cookie access (Vercel supports this)
+export const dynamic = "force-dynamic";
+
+/**
+ * Root Layout - Server Component
+ * 
+ * DEFAULT BEHAVIOR: Arabic (ar) with RTL layout
+ * 
+ * Read locale cookie set by middleware to control global lang/dir at <html>
+ * - Defaults to 'ar' (Arabic) if cookie cannot be read or doesn't exist
+ * - This ensures all new visitors get Arabic-first, RTL experience by default
+ * - Users can switch to English via language toggle, which saves their preference
+ * 
+ * Note: This is a Server Component that reads cookies server-side.
+ * For static export (Firebase), convert to Client Component.
+ */
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  /**
-   * DEFAULT BEHAVIOR: Arabic (ar) with RTL layout
-   * 
-   * For static export, we read locale from cookies client-side
-   * - Defaults to 'ar' (Arabic) if cookie cannot be read or doesn't exist
-   * - This ensures all new visitors get Arabic-first, RTL experience by default
-   * - Users can switch to English via language toggle, which saves their preference
-   */
-  const [locale, setLocale] = useState<"en" | "ar">("ar"); // DEFAULT: Arabic
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-    // Read locale from cookie client-side
-    if (typeof document !== "undefined") {
-      const cookies = document.cookie.split(";");
-      const localeCookie = cookies.find((c) => c.trim().startsWith("locale="));
-      const localeValue = localeCookie?.split("=")[1];
-      if (localeValue === "en" || localeValue === "ar") {
-        setLocale(localeValue);
-      }
-    }
-  }, []);
-
+  let locale: "en" | "ar" = "ar"; // DEFAULT: Arabic
+  try {
+    const cookieStore = await cookies();
+    const localeValue = cookieStore.get("locale")?.value;
+    // If cookie exists and is explicitly 'en', use English; otherwise default to Arabic
+    locale = localeValue === "en" ? "en" : "ar";
+  } catch (error) {
+    // Fallback to Arabic (default) if cookies cannot be read
+    locale = "ar";
+  }
   // Set direction based on locale: Arabic = RTL, English = LTR
   const dir = locale === "ar" ? "rtl" : "ltr";
-  
   return (
     <html lang={locale} dir={dir}>
-      <head>
-        <title>Sera Pro - سيرة برو</title>
-        <meta name="description" content="AI-powered Arabic-English CV builder with RTL support" />
-      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >

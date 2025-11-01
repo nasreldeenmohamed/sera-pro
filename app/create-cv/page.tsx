@@ -868,18 +868,14 @@ function CreateCvPageContent() {
     setAiError(null);
     try {
       const currentValues = form.getValues();
-      // Note: API routes disabled for static export - AI enhancement unavailable in production
-      // TODO: Implement via Cloud Functions or external API service
-      const res = await fetch("https://your-api-endpoint.com/api/ai/enhance", {
+      // Call AI enhancement API endpoint
+      const res = await fetch("/api/ai/enhance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           data: currentValues, 
           locale: cvLanguage || (isAr ? "ar" : "en") 
         }),
-      }).catch(() => {
-        // Fallback: Show error for now
-        throw new Error(t("AI enhancement service is currently unavailable.", "خدمة تحسين الذكاء الاصطناعي غير متاحة حاليًا."));
       });
       
       if (!res.ok) {
