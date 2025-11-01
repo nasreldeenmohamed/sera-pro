@@ -1,7 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { enhanceCvWithClaude } from "@/lib/ai/anthropic";
 
-// AI Enhancement endpoint: uses Claude when ANTHROPIC_API_KEY is present, otherwise falls back.
+/**
+ * AI CV Enhancement API Route
+ * 
+ * This endpoint uses Anthropic's Claude AI to enhance CV content.
+ * It improves titles, summaries, and other text fields with professional language.
+ * 
+ * Request Body:
+ * - data: CV form data (fullName, title, summary, experience, education, etc.)
+ * - locale: "ar" | "en" (language for AI enhancement)
+ * - model: Optional Claude model name (defaults to configured model)
+ * 
+ * Returns: { data: enhancedCvData } - Enhanced CV with improved text
+ * 
+ * Environment Variables Required:
+ * - ANTHROPIC_API_KEY: Your Anthropic API key for Claude
+ * 
+ * Note: This is a premium feature. Users should be authenticated or have an active plan.
+ */
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
