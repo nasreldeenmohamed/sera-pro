@@ -151,9 +151,6 @@ export default function DashboardPage() {
   /**
    * Delete a CV and refresh the list from Firestore
    * After deletion, refetch to ensure data consistency across devices
-   */
-  /**
-   * Delete a CV and refresh the list from Firestore
    * Note: Confirmation is handled by CvPreviewCard component
    */
   async function onDelete(cvId: string) {
