@@ -1,9 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createKashierCheckout } from "@/payments/kashier";
 
-// Checkout endpoint returning a Kashier URL with return URLs for success/cancel
-// Query params: product (one_time|flex_pack|annual_pass), userId (optional, can come from auth)
-// Optional: customerEmail, customerName (for better payment form initialization)
+/**
+ * Kashier Payment Checkout API Route
+ * 
+ * This endpoint creates a Kashier payment checkout session and returns the payment URL.
+ * 
+ * Query Parameters:
+ * - product: "one_time" | "flex_pack" | "annual_pass" (required)
+ * - userId: Firebase user ID (optional, can come from auth context)
+ * - customerEmail: Customer email (optional, pre-fills payment form)
+ * - customerName: Customer name (optional, pre-fills payment form)
+ * 
+ * Returns: { url: string } - Kashier checkout URL
+ * 
+ * Environment Variables Required:
+ * - KASHIER_MERCHANT_ID: Your Kashier merchant ID
+ * - KASHIER_SECRET_KEY: Your Kashier secret key
+ * - KASHIER_MODE: "test" or "production"
+ * 
+ * Pricing (in EGP):
+ * - one_time: 79 EGP (Single CV purchase)
+ * - flex_pack: 149 EGP (5 CVs, 6 months)
+ * - annual_pass: 299 EGP (Unlimited CVs, 1 year)
+ */
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const product = searchParams.get("product") || searchParams.get("plan") || "one_time";
