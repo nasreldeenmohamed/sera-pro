@@ -1,5 +1,5 @@
-import type { Metadata } from "next";
-import { cookies } from "next/headers";
+"use client";
+import { useEffect, useState } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
@@ -15,34 +15,44 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  // App name reflects bilingual brand
-  title: "Sera Pro - سيرة برو",
-  description: "AI-powered Arabic-English CV builder with RTL support",
-};
-
-// Force dynamic rendering to allow cookie access
-export const dynamic = "force-dynamic";
-
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // Read locale cookie set by middleware to control global lang/dir at <html>
-  // Default to 'en' if cookie cannot be read
-  let locale: "en" | "ar" = "en";
-  try {
-    const cookieStore = await cookies();
-    const localeValue = cookieStore.get("locale")?.value;
-    locale = localeValue === "ar" ? "ar" : "en";
-  } catch (error) {
-    // Fallback to 'en' if cookies cannot be read
-    locale = "en";
-  }
+  /**
+   * DEFAULT BEHAVIOR: Arabic (ar) with RTL layout
+   * 
+   * For static export, we read locale from cookies client-side
+   * - Defaults to 'ar' (Arabic) if cookie cannot be read or doesn't exist
+   * - This ensures all new visitors get Arabic-first, RTL experience by default
+   * - Users can switch to English via language toggle, which saves their preference
+   */
+  const [locale, setLocale] = useState<"en" | "ar">("ar"); // DEFAULT: Arabic
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    // Read locale from cookie client-side
+    if (typeof document !== "undefined") {
+      const cookies = document.cookie.split(";");
+      const localeCookie = cookies.find((c) => c.trim().startsWith("locale="));
+      const localeValue = localeCookie?.split("=")[1];
+      if (localeValue === "en" || localeValue === "ar") {
+        setLocale(localeValue);
+      }
+    }
+  }, []);
+
+  // Set direction based on locale: Arabic = RTL, English = LTR
   const dir = locale === "ar" ? "rtl" : "ltr";
+  
   return (
     <html lang={locale} dir={dir}>
+      <head>
+        <title>Sera Pro - سيرة برو</title>
+        <meta name="description" content="AI-powered Arabic-English CV builder with RTL support" />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >

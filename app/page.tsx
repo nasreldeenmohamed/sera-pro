@@ -6,12 +6,23 @@ import { Button } from "@/components/ui/button";
 import { SiteLayout } from "@/components/layout/SiteLayout";
 import { Check } from "lucide-react";
 
-// Bilingual Landing Page for "Sera Pro - سيرة برو"
-// - Mobile-first, professional palette (blue/gold)
-// - shadcn/ui Buttons, semantic sections
-// - Uses shared SiteLayout for consistent header/footer
+/**
+ * Bilingual Landing Page for "Sera Pro - سيرة برو"
+ * 
+ * DEFAULT BEHAVIOR: Arabic (ar) with RTL layout
+ * - All new visitors see Arabic interface by default (RTL direction)
+ * - Pricing displayed in EGP (Egyptian Pounds) - optimized for Egyptian market
+ * - Users can switch to English via language toggle in header
+ * - Language preference is saved and persists across sessions
+ * 
+ * Features:
+ * - Mobile-first, professional palette (blue/gold)
+ * - shadcn/ui Buttons, semantic sections
+ * - Uses shared SiteLayout for consistent header/footer
+ * - Bilingual content (AR/EN) with automatic RTL/LTR switching
+ */
 export default function Home() {
-  // Global locale context (cookie + localStorage persistence)
+  // Global locale context (cookie + localStorage persistence) - defaults to Arabic
   const { isAr, t } = useLocale();
 
   return (

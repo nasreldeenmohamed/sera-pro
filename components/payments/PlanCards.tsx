@@ -11,6 +11,11 @@ import type { UserPlan } from "@/firebase/firestore";
 /**
  * Plan Cards Component
  * 
+ * DEFAULT BEHAVIOR: Arabic (ar) with RTL layout, EGP currency
+ * - All pricing displayed in EGP (Egyptian Pounds) - optimized for Egyptian market
+ * - Supports both Arabic (RTL) and English (LTR) layouts
+ * - Currency formatting and pricing are Egypt-friendly by default
+ * 
  * Displays visually distinct payment plan options with clear descriptions,
  * pricing, benefits, and comparison features. Designed to help users
  * easily understand and choose the right plan for their needs.
@@ -141,7 +146,10 @@ export function PlanCards({ currentPlan, onPurchase }: { currentPlan: UserPlan |
             className={`relative transition-all hover:shadow-lg ${
               plan.popular ? "ring-2" : ""
             }`}
-            style={plan.popular ? { ringColor: plan.color + "40" } : {}}
+            style={plan.popular ? { 
+              "--tw-ring-color": plan.color + "40",
+              borderColor: plan.color + "40"
+            } as React.CSSProperties : {}}
           >
             {/* Popular Badge */}
             {plan.popular && (

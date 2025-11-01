@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { listUserCvs, deleteUserCv, getUserPlan, getUserProfile, type UserCv, type UserPlan } from "@/firebase/firestore";
+import { listUserCvs, deleteUserCv, getUserPlan, getUserProfile, getUserDraft, type UserCv, type UserPlan } from "@/firebase/firestore";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -11,7 +11,9 @@ import { useLocale } from "@/lib/locale-context";
 import { PlanCards } from "@/components/payments/PlanCards";
 import { KashierPaymentModal } from "@/components/payments/KashierPaymentModal";
 import { SiteLayout } from "@/components/layout/SiteLayout";
-import { CheckCircle2, Zap, Star, Crown, Info } from "lucide-react";
+import { CheckCircle2, Zap, Star, Crown, Info, Download } from "lucide-react";
+import { ClassicTemplate } from "@/components/pdf/Templates";
+import { downloadPdf } from "@/lib/pdf";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -74,6 +76,63 @@ export default function DashboardPage() {
     try {
       await deleteUserCv(user.uid, cvId);
       setCvs((prev) => prev.filter((c) => c.id !== cvId));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Download CV with watermark for free plan users
+  async function downloadCvWithWatermark(cvId: string) {
+    if (!user) return;
+    setBusy(true);
+    try {
+      // Fetch the full CV data from cvDrafts collection
+      // Note: The actual document has all fields, even though UserCv type is minimal
+      const { getUserCv } = await import("@/firebase/firestore");
+      const cvData = await getUserCv(user.uid, cvId);
+      
+      if (!cvData) {
+        alert(t("CV not found.", "السيرة غير موجودة."));
+        return;
+      }
+
+      // The cvData from getUserCv should have all fields (experience, education, etc.)
+      // Cast to any to access all properties beyond the minimal UserCv type
+      const fullCvData = cvData as any;
+
+      // Prepare data for PDF template
+      const pdfData = {
+        fullName: fullCvData.fullName || "",
+        title: fullCvData.title || "",
+        summary: fullCvData.summary || "",
+        contact: {
+          email: fullCvData.contact?.email || "",
+          phone: fullCvData.contact?.phone || "",
+          location: fullCvData.contact?.location || "",
+          website: fullCvData.contact?.website || "",
+        },
+        experience: Array.isArray(fullCvData.experience) ? fullCvData.experience : [],
+        education: Array.isArray(fullCvData.education) ? fullCvData.education : [],
+        skills: Array.isArray(fullCvData.skills) ? fullCvData.skills : [],
+        languages: Array.isArray(fullCvData.languages) ? fullCvData.languages : [],
+        certifications: Array.isArray(fullCvData.certifications) ? fullCvData.certifications : [],
+      };
+
+      // Determine if CV is in Arabic (check cvLanguage or default based on UI locale)
+      const isCvAr = fullCvData.cvLanguage === "ar" || (fullCvData.cvLanguage !== "en" && isAr);
+
+      // Generate PDF with watermark for free plan
+      const pdfDoc = ClassicTemplate({ 
+        data: pdfData, 
+        isAr: isCvAr,
+        showWatermark: true // Always show watermark for free plan downloads
+      });
+
+      const filename = `${fullCvData.fullName || "CV"}_${isAr ? "سيرة_ذاتية" : "Resume"}.pdf`;
+      await downloadPdf(pdfDoc, filename);
+    } catch (error) {
+      console.error("Failed to download CV:", error);
+      alert(t("Failed to download CV. Please try again.", "فشل تنزيل السيرة. يرجى المحاولة مرة أخرى."));
     } finally {
       setBusy(false);
     }
@@ -163,9 +222,30 @@ export default function DashboardPage() {
                 </div>
               </div>
               {(!plan || plan.planType === "free") && (
-                <Badge variant="outline" className="text-xs">
-                  {t("Upgrade to unlock more", "قم بالترقية لفتح المزيد")}
-                </Badge>
+                <div className={`flex flex-col gap-2 ${isAr ? "items-start" : "items-end"}`}>
+                  <Badge variant="outline" className="text-xs">
+                    {t("Upgrade to unlock more", "قم بالترقية لفتح المزيد")}
+                  </Badge>
+                  {/* Download button for free plan users with CVs */}
+                  {cvs.length > 0 && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => {
+                        // Download the first CV (or most recent) with watermark
+                        const cvToDownload = cvs[0];
+                        if (cvToDownload) {
+                          downloadCvWithWatermark(cvToDownload.id);
+                        }
+                      }}
+                      disabled={busy}
+                      className="flex items-center gap-2"
+                    >
+                      <Download className="h-4 w-4" />
+                      {t("Download CV (Watermarked)", "تنزيل السيرة (مع علامة مائية)")}
+                    </Button>
+                  )}
+                </div>
               )}
             </div>
           </CardHeader>

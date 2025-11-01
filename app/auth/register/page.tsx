@@ -268,7 +268,7 @@ export default function RegisterPage() {
                 <FormItem>
                   <FormLabel className="text-sm">{t("Full Name", "الاسم الكامل")}</FormLabel>
                   <FormControl>
-                    <Input type="text" placeholder={t("John Doe", "أحمد محمد")} {...field} />
+                    <Input type="text" placeholder={t("John Doe", "أحمد محمد")} {...field} dir={isAr ? "rtl" : "ltr"} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -281,7 +281,7 @@ export default function RegisterPage() {
                 <FormItem>
                   <FormLabel className="text-sm">{t("Phone (Optional)", "الهاتف (اختياري)")}</FormLabel>
                   <FormControl>
-                    <Input type="tel" placeholder={t("+20 1234567890", "+20 1234567890")} {...field} />
+                    <Input type="tel" placeholder={t("+20 1234567890", "+20 1234567890")} {...field} dir={isAr ? "rtl" : "ltr"} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -294,7 +294,7 @@ export default function RegisterPage() {
                 <FormItem>
                   <FormLabel className="text-sm">{t("Email", "البريد الإلكتروني")}</FormLabel>
                   <FormControl>
-                    <Input type="email" placeholder={t("you@example.com", "you@example.com")} {...field} />
+                    <Input type="email" placeholder={t("you@example.com", "you@example.com")} {...field} dir={isAr ? "rtl" : "ltr"} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -307,7 +307,7 @@ export default function RegisterPage() {
                 <FormItem>
                   <FormLabel className="text-sm">{t("Password", "كلمة المرور")}</FormLabel>
                   <FormControl>
-                    <Input type="password" placeholder={t("••••••••", "••••••••")} {...field} />
+                    <Input type="password" placeholder={t("••••••••", "••••••••")} {...field} dir={isAr ? "rtl" : "ltr"} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -320,7 +320,7 @@ export default function RegisterPage() {
                 <FormItem>
                   <FormLabel className="text-sm">{t("Confirm password", "تأكيد كلمة المرور")}</FormLabel>
                   <FormControl>
-                    <Input type="password" placeholder={t("••••••••", "••••••••")} {...field} />
+                    <Input type="password" placeholder={t("••••••••", "••••••••")} {...field} dir={isAr ? "rtl" : "ltr"} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

@@ -60,7 +60,7 @@ export default function ResetPage() {
                 <FormItem>
                   <FormLabel className="text-sm">{t("Email", "البريد الإلكتروني")}</FormLabel>
                   <FormControl>
-                    <Input type="email" placeholder={t("you@example.com", "you@example.com")} {...field} />
+                    <Input type="email" placeholder={t("you@example.com", "you@example.com")} {...field} dir={isAr ? "rtl" : "ltr"} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

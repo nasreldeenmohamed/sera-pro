@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { useLocale } from "@/lib/locale-context";
@@ -170,15 +170,15 @@ type FormValues = z.infer<typeof schema>;
  * - Add trial mode (e.g., 1 free download for guests)
  * - Add draft expiration warnings
  */
-export default function CreateCvPage() {
+function CreateCvPageContent() {
   const router = useRouter();
   const params = useSearchParams();
-  const cvId = params.get("id");
+  const cvId = params?.get("id") || null;
   const { user, loading: authLoading } = useAuth();
   const { isAr, t } = useLocale();
 
   const form = useForm<FormValues>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(schema) as any, // Type compatibility fix for Next.js export
     mode: "onChange",
     defaultValues: {
       fullName: "",
@@ -868,13 +868,18 @@ export default function CreateCvPage() {
     setAiError(null);
     try {
       const currentValues = form.getValues();
-      const res = await fetch("/api/ai/enhance", {
+      // Note: API routes disabled for static export - AI enhancement unavailable in production
+      // TODO: Implement via Cloud Functions or external API service
+      const res = await fetch("https://your-api-endpoint.com/api/ai/enhance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           data: currentValues, 
           locale: cvLanguage || (isAr ? "ar" : "en") 
         }),
+      }).catch(() => {
+        // Fallback: Show error for now
+        throw new Error(t("AI enhancement service is currently unavailable.", "خدمة تحسين الذكاء الاصطناعي غير متاحة حاليًا."));
       });
       
       if (!res.ok) {
@@ -1115,13 +1120,17 @@ export default function CreateCvPage() {
             {draftLastUpdated && (
               <p className="mt-1 flex items-center gap-1 text-xs text-zinc-600 dark:text-zinc-400">
                 <Clock className="h-3 w-3" />
-                {t("Last saved", "آخر حفظ")}: {draftLastUpdated.toLocaleString(isAr ? "ar-EG" : "en-US", {
-                  year: "numeric",
-                  month: "short",
-                  day: "numeric",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
+                {t("Last saved", "آخر حفظ")}: {draftLastUpdated.toLocaleString(
+                  // DEFAULT: Arabic uses Egypt locale (ar-EG) for Egypt-friendly date/time formats
+                  isAr ? "ar-EG" : "en-US",
+                  {
+                    year: "numeric",
+                    month: "short",
+                    day: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  }
+                )}
                 {!user && (
                   <span className="ml-1 text-zinc-400">({t("local", "محلي")})</span>
                 )}
@@ -2000,6 +2009,14 @@ export default function CreateCvPage() {
         onAuthSuccess={pendingProtectedAction || undefined}
       />
     </SiteLayout>
+  );
+}
+
+export default function CreateCvPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <CreateCvPageContent />
+    </Suspense>
   );
 }
 

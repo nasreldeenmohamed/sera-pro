@@ -13,19 +13,35 @@ type LocaleContextValue = {
 
 const LocaleContext = createContext<LocaleContextValue | undefined>(undefined);
 
-// Provides app-wide locale with cookie + localStorage persistence.
-// When locale changes, sets cookie 'locale' and refreshes to let server layout set dir/lang.
+/**
+ * Locale Provider - Manages app-wide language and RTL/LTR direction
+ * 
+ * DEFAULT BEHAVIOR: Arabic (ar) with RTL layout
+ * - Provides app-wide locale with cookie + localStorage persistence
+ * - When locale changes, sets cookie 'locale' and refreshes to let server layout set dir/lang
+ * - initialLocale should come from server-side (layout.tsx) which defaults to 'ar'
+ * - User preference is saved when they toggle language, allowing them to override the default
+ */
 export function LocaleProvider({ initialLocale, children }: { initialLocale: Locale; children: React.ReactNode }) {
   const router = useRouter();
   const [locale, setLocaleState] = useState<Locale>(initialLocale);
 
   useEffect(() => {
-    // hydrate from localStorage if present
-    const saved = (typeof window !== "undefined" && (localStorage.getItem("locale") as Locale | null)) || null;
-    if (saved && saved !== locale) {
-      setLocaleState(saved);
-      document.cookie = `locale=${saved}; path=/; max-age=${60 * 60 * 24 * 365}`;
-      router.refresh();
+    // Hydrate from localStorage if present (respects user's explicit preference)
+    // DEFAULT BEHAVIOR: If localStorage exists, use it (user explicitly chose a language)
+    // If localStorage doesn't exist, the server default (Arabic) will be used
+    // This ensures:
+    // - New visitors get Arabic default (no localStorage)
+    // - Returning users who chose English keep their preference (localStorage="en")
+    // - Returning users who chose Arabic keep their preference (localStorage="ar")
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("locale") as Locale | null;
+      if (saved && saved !== locale) {
+        // User has an explicit preference saved - respect it
+        setLocaleState(saved);
+        document.cookie = `locale=${saved}; path=/; max-age=${60 * 60 * 24 * 365}`;
+        router.refresh();
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

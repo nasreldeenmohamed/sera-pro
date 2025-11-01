@@ -17,6 +17,12 @@ import { User, LogOut, Settings } from "lucide-react";
 
 /**
  * Global header component for Sera Pro - سيرة برو
+ * 
+ * DEFAULT BEHAVIOR: Arabic (ar) with RTL layout
+ * - Language toggle (AR/EN) is always visible in header, allowing users to switch at any time
+ * - When user switches language, preference is saved to cookie + localStorage
+ * - Navigation adapts to RTL/LTR direction automatically based on locale
+ * 
  * Features:
  * - Brand logo/name with link to home
  * - Language toggle (AR/EN) using global locale context
@@ -119,8 +125,8 @@ export function Header() {
             </DropdownMenu>
           )}
 
-          {/* Language toggle - always visible */}
-          <div className="flex items-center gap-2 text-sm border-l pl-4 ml-2">
+          {/* Language toggle - always visible, allows switching between Arabic (RTL) and English (LTR) */}
+          <div className={`flex items-center gap-2 text-sm ${isAr ? "border-r pr-4 mr-2" : "border-l pl-4 ml-2"}`}>
             <span className="opacity-80 text-xs">EN</span>
             <Switch checked={isAr} onCheckedChange={(v) => setLocale(v ? "ar" : "en")} />
             <span className="opacity-80 text-xs">AR</span>

@@ -17,6 +17,12 @@
 /.next/
 /out/
 
+# firebase
+functions/node_modules/
+functions/.env
+.firebase/
+.firebaserc.local
+
 # production
 /build
 
