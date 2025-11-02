@@ -3,66 +3,22 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { SiteLayout } from "@/components/layout/SiteLayout";
 import { useLocale } from "@/lib/locale-context";
-import { useAuth } from "@/lib/auth-context";
-import { useRouter } from "next/navigation";
-import { setUserPlanFromProduct } from "@/firebase/firestore";
+import { PlanActionButton } from "@/components/payments/PlanActionButton";
 import { Check } from "lucide-react";
 
 /**
- * QA/Testing Mode: Bypass Payment
+ * Pricing Page
  * 
- * Set NEXT_PUBLIC_ENABLE_QA_PAYMENT_BYPASS=true in .env.local to enable payment bypass for QA/testing.
- * When enabled, clicking "Subscribe" will directly update the subscription in Firestore
- * without going through payment gateway.
+ * Shows all 4 plans: Free, One-Time Purchase, Flex Pack, Annual Pass
+ * Uses shared SiteLayout for consistent header/footer
+ * Uses PlanActionButton component for unified action handling across Home and Pricing pages
  * 
- * ⚠️ IMPORTANT: Remove or disable this before production deployment!
+ * All plan action buttons now share the same logic:
+ * - Free: Navigate to CV builder (no auth required)
+ * - Paid plans: Check authentication, redirect to login if needed, then proceed with purchase
  */
-const ENABLE_QA_PAYMENT_BYPASS = process.env.NEXT_PUBLIC_ENABLE_QA_PAYMENT_BYPASS === "true";
-
-// Pricing page matching the landing page pricing section
-// Shows all 4 plans: Free, One-Time Purchase, Flex Pack, Annual Pass
-// Uses shared SiteLayout for consistent header/footer
 export default function PricingPage() {
   const { isAr, t } = useLocale();
-  const { user } = useAuth();
-  const router = useRouter();
-  
-  /**
-   * Handle purchase/subscribe click
-   * In QA mode: Bypass payment and directly activate plan
-   * In production: Redirect to payment checkout
-   */
-  const handlePurchase = async (product: "one_time" | "flex_pack" | "annual_pass") => {
-    if (!user) {
-      router.push("/auth?redirect=/pricing");
-      return;
-    }
-
-    // QA/TESTING MODE: Bypass payment and directly activate plan
-    if (ENABLE_QA_PAYMENT_BYPASS) {
-      try {
-        console.warn("[QA MODE] Payment bypass enabled - directly activating plan:", product);
-        await setUserPlanFromProduct(user.uid, product);
-        console.log("[QA MODE] Plan activated successfully:", product);
-        
-        // Refresh to show updated plan
-        router.refresh();
-        
-        // Show success message
-        alert(t(
-          `QA Mode: ${product} plan activated successfully!`,
-          `وضع QA: تم تفعيل خطة ${product} بنجاح!`
-        ));
-      } catch (error: any) {
-        console.error("[QA MODE] Failed to activate plan:", error);
-        alert(t("Failed to activate plan. Please try again.", "فشل تفعيل الخطة. يرجى المحاولة مرة أخرى."));
-      }
-      return;
-    }
-
-    // PRODUCTION MODE: Redirect to payment checkout
-    router.push(`/api/payments/kashier/checkout?product=${product}&userId=${user.uid}`);
-  };
 
   return (
     <SiteLayout>
@@ -87,10 +43,11 @@ export default function PricingPage() {
             <div className="rounded-xl border p-6 hover:shadow-md transition-shadow">
               <h3 className="text-lg font-semibold">{t("Free", "مجانية")}</h3>
               <p className="mt-1 text-3xl font-bold">EGP 0</p>
+              {/* Free Plan: Updated to show 3 templates (updated from 2 templates) */}
               <ul className="mt-4 space-y-2 text-sm text-zinc-700 dark:text-zinc-300">
                 {[
                   t("1 basic CV", "سيرة أساسية واحدة"),
-                  t("2 templates", "قالبان"),
+                  t("3 templates", "3 قوالب"),
                   t("Watermarked PDF", "ملف PDF بعلامة مائية"),
                 ].map((f) => (
                   <li key={f} className="flex items-center gap-2">
@@ -99,18 +56,19 @@ export default function PricingPage() {
                   </li>
                 ))}
               </ul>
-              <Button
-                asChild
-                className="mt-6 w-full text-white"
-                style={{ backgroundColor: "#0d47a1" }}
-              >
-                <Link href="/create-cv">
-                  {t("Create Free CV", "أنشئ سيرة مجانية")}
-                </Link>
-              </Button>
+              {/* Free plan: Navigate to CV builder (no authentication required) */}
+              <PlanActionButton
+                product="free"
+                returnUrl="/pricing"
+              />
             </div>
 
-            {/* One-Time Purchase */}
+            {/* One-Time Purchase Plan
+                Updated plan details (2024):
+                - Price: EGP 49 (fixed price, no longer variable)
+                - Features: 1 CV, 3 Templates, Unlimited Edits for 7 days
+                - Simplified offering for single CV creation needs
+            */}
             <div
               className="rounded-xl border p-6 ring-1 hover:shadow-md transition-shadow"
               style={{
@@ -126,22 +84,15 @@ export default function PricingPage() {
                   {t("Popular", "الأكثر شعبية")}
                 </span>
               </div>
-              <p className="mt-1 text-3xl font-bold">EGP 49–79</p>
-              <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-1">
-                {t("per CV", "لكل سيرة")}
-              </p>
+              <p className="mt-1 text-3xl font-bold">EGP 49</p>
               <ul className="mt-4 space-y-2 text-sm text-zinc-700 dark:text-zinc-300">
                 {[
+                  t("1 CV", "سيرة واحدة"),
+                  t("3 Templates", "3 قوالب"),
                   t(
-                    "Per CV, AI‑enhanced, ATS‑optimized",
-                    "لكل سيرة، محسنة بالذكاء الاصطناعي ومتوافقة مع أنظمة التتبع"
+                    "Unlimited edits for 7 days",
+                    "تعديلات غير محدودة لمدة 7 أيام"
                   ),
-                  t("10+ templates", "أكثر من 10 قوالب"),
-                  t(
-                    "Unlimited edits for 14 days",
-                    "تعديلات غير محدودة لمدة 14 يومًا"
-                  ),
-                  t("No watermark", "بدون علامة مائية"),
                 ].map((f) => (
                   <li key={f} className="flex items-center gap-2">
                     <Check className="h-4 w-4 flex-shrink-0" style={{ color: "#d4af37" }} />
@@ -149,14 +100,11 @@ export default function PricingPage() {
                   </li>
                 ))}
               </ul>
-              {/* TODO(payment): At checkout, select 49 or 79 tier based on template group */}
-              <Button
-                onClick={() => handlePurchase("one_time")}
-                className="mt-6 w-full text-white"
-                style={{ backgroundColor: "#0d47a1" }}
-              >
-                {t("Buy CV", "شراء سيرة")}
-              </Button>
+              {/* One-Time Purchase: Requires authentication, then initiates purchase flow */}
+              <PlanActionButton
+                product="one_time"
+                returnUrl="/pricing"
+              />
             </div>
 
             {/* Flex Pack */}
@@ -178,14 +126,11 @@ export default function PricingPage() {
                   </li>
                 ))}
               </ul>
-              {/* TODO(wallet): Deduct 1 credit per exported CV, show balance in dashboard */}
-              <Button
-                onClick={() => handlePurchase("flex_pack")}
-                className="mt-6 w-full text-white"
-                style={{ backgroundColor: "#0d47a1" }}
-              >
-                {t("Get Flex Pack", "شراء الباقة المرنة")}
-              </Button>
+              {/* Flex Pack: Requires authentication, then initiates pack purchase workflow */}
+              <PlanActionButton
+                product="flex_pack"
+                returnUrl="/pricing"
+              />
             </div>
 
             {/* Annual Pass */}
@@ -217,14 +162,11 @@ export default function PricingPage() {
                   </li>
                 ))}
               </ul>
-              {/* TODO(access): Grant pro scope; renew yearly; show renewal date */}
-              <Button
-                onClick={() => handlePurchase("annual_pass")}
-                className="mt-6 w-full text-white"
-                style={{ backgroundColor: "#0d47a1" }}
-              >
-                {t("Get Annual Pass", "الحصول على البطاقة السنوية")}
-              </Button>
+              {/* Annual Pass: Requires authentication, then initiates subscription purchase workflow */}
+              <PlanActionButton
+                product="annual_pass"
+                returnUrl="/pricing"
+              />
             </div>
           </div>
 
@@ -243,8 +185,8 @@ export default function PricingPage() {
               <ul className="list-disc pl-5 space-y-1">
                 <li>
                   {t(
-                    "One-Time grants 14 days of unlimited edits for that CV.",
-                    "الشراء لمرة واحدة يمنح 14 يومًا من التعديلات غير المحدودة لتلك السيرة."
+                    "One-Time grants 7 days of unlimited edits for that CV.",
+                    "الشراء لمرة واحدة يمنح 7 أيام من التعديلات غير المحدودة لتلك السيرة."
                   )}
                 </li>
                 <li>

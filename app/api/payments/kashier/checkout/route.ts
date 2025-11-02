@@ -20,7 +20,7 @@ import { createKashierCheckout } from "@/payments/kashier";
  * - KASHIER_MODE: "test" or "production"
  * 
  * Pricing (in EGP):
- * - one_time: 79 EGP (Single CV purchase)
+ * - one_time: 49 EGP (Single CV purchase: 1 CV, 3 templates, 7 days edits)
  * - flex_pack: 149 EGP (5 CVs, 6 months)
  * - annual_pass: 299 EGP (Unlimited CVs, 1 year)
  */
@@ -32,17 +32,18 @@ export async function GET(req: NextRequest) {
   const customerName = searchParams.get("customerName");
 
   // Pricing map: product -> EGP amount
+  // Updated 2024: one_time price changed from 79 to 49 EGP
   const pricing: Record<string, number> = {
-    one_time: 79, // Single CV purchase
+    one_time: 49, // Single CV purchase: 1 CV, 3 templates, 7 days unlimited edits
     flex_pack: 149, // 5 CVs, 6 months
     annual_pass: 299, // Unlimited CVs, 1 year
     // Legacy plan names (for backward compatibility)
     starter: 0, // Free plan
-    pro: 79,
+    pro: 49, // Updated to match one_time price
     business: 149,
   };
 
-  const amount = pricing[product] ?? 79;
+  const amount = pricing[product] ?? 49;
   if (amount === 0) {
     return NextResponse.json({ error: "Invalid product for paid checkout" }, { status: 400 });
   }

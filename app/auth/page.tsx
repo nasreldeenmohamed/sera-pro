@@ -1,4 +1,5 @@
 "use client";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useLocale } from "@/lib/locale-context";
 import { Button } from "@/components/ui/button";
@@ -7,8 +8,21 @@ import { SiteLayout } from "@/components/layout/SiteLayout";
 
 // Auth landing page that directs users to login or register
 // Uses shared SiteLayout for consistent header/footer with smart navigation
+// Handles redirect parameter and passes it to login/register pages
 export default function AuthPage() {
   const { t } = useLocale();
+
+  // Get redirect URL from query params to pass to login/register pages
+  // This allows users to return to the original page (e.g., pricing) after authentication
+  const [redirectQuery, setRedirectQuery] = useState("");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const redirect = params.get("redirect");
+      setRedirectQuery(redirect ? `?redirect=${encodeURIComponent(redirect)}` : "");
+    }
+  }, []);
 
   return (
     <SiteLayout>
@@ -51,7 +65,7 @@ export default function AuthPage() {
                   className="w-full text-white"
                   style={{ backgroundColor: "#0d47a1" }}
                 >
-                  <Link href="/auth/login">{t("Sign In", "تسجيل الدخول")}</Link>
+                  <Link href={`/auth/login${redirectQuery}`}>{t("Sign In", "تسجيل الدخول")}</Link>
                 </Button>
               </CardContent>
             </Card>
@@ -78,7 +92,7 @@ export default function AuthPage() {
                   className="w-full text-white"
                   style={{ backgroundColor: "#0d47a1" }}
                 >
-                  <Link href="/auth/register">{t("Create Account", "إنشاء حساب")}</Link>
+                  <Link href={`/auth/register${redirectQuery}`}>{t("Create Account", "إنشاء حساب")}</Link>
                 </Button>
               </CardContent>
             </Card>

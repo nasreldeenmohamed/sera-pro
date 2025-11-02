@@ -1,19 +1,11 @@
 "use client";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useLocale } from "@/lib/locale-context";
 import { useAuth } from "@/lib/auth-context";
-import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { User, LogOut, Settings } from "lucide-react";
+import { SegmentedControl } from "@/components/ui/segmented-control";
+import { User } from "lucide-react";
+import { UKFlag, EgyptFlag } from "@/components/ui/flags";
 
 /**
  * Global header component for Sera Pro - سيرة برو
@@ -26,23 +18,14 @@ import { User, LogOut, Settings } from "lucide-react";
  * Features:
  * - Brand logo/name with link to home
  * - Language toggle (AR/EN) using global locale context
- * - Smart navigation: shows auth buttons when logged out, user menu when logged in
+ * - Smart navigation: shows auth buttons when logged out, user profile link when logged in
+ * - Clicking user name/avatar navigates directly to /profile page (no dropdown menu)
  * - Mobile-responsive
  * - RTL/LTR support based on locale
  */
 export function Header() {
   const { isAr, t, setLocale } = useLocale();
-  const { user, loading, signOut } = useAuth();
-  const router = useRouter();
-
-  async function handleSignOut() {
-    try {
-      await signOut();
-      router.push("/");
-    } catch (error) {
-      console.error("Sign out error:", error);
-    }
-  }
+  const { user, loading } = useAuth();
 
   return (
     <header className="sticky top-0 z-50 border-b bg-white dark:bg-black backdrop-blur-sm bg-opacity-95">
@@ -92,44 +75,76 @@ export function Header() {
             )}
           </nav>
 
-          {/* User menu (when logged in) */}
+          {/* User profile link (when logged in) - navigates directly to /profile page */}
           {!loading && user && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="flex items-center gap-2">
+            <Button 
+              asChild 
+              variant="ghost" 
+              size="sm" 
+              className="flex items-center gap-2"
+            >
+              <Link href="/profile" className="flex items-center gap-2">
+                {/* User avatar or icon */}
+                {user.photoURL ? (
+                  <img 
+                    src={user.photoURL} 
+                    alt={user.displayName || user.email || "User"} 
+                    className="h-6 w-6 rounded-full"
+                  />
+                ) : (
                   <User className="h-4 w-4" />
-                  <span className="hidden sm:inline">{user.email?.split("@")[0] || t("Account", "حساب")}</span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align={isAr ? "start" : "end"}>
-                <DropdownMenuLabel>{t("My Account", "حسابي")}</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <Link href="/dashboard" className="flex items-center gap-2">
-                    <Settings className="h-4 w-4" />
-                    {t("Dashboard", "لوحة التحكم")}
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/create-cv" className="flex items-center gap-2">
-                    <User className="h-4 w-4" />
-                    {t("Create CV", "إنشاء سيرة")}
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleSignOut} className="text-red-600 dark:text-red-400">
-                  <LogOut className="h-4 w-4 mr-2" />
-                  {t("Sign Out", "تسجيل الخروج")}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                )}
+                {/* User name or email prefix */}
+                <span className="hidden sm:inline">
+                  {user.displayName || user.email?.split("@")[0] || t("Profile", "الملف الشخصي")}
+                </span>
+              </Link>
+            </Button>
           )}
 
-          {/* Language toggle - always visible, allows switching between Arabic (RTL) and English (LTR) */}
-          <div className={`flex items-center gap-2 text-sm ${isAr ? "border-r pr-4 mr-2" : "border-l pl-4 ml-2"}`}>
-            <span className="opacity-80 text-xs">EN</span>
-            <Switch checked={isAr} onCheckedChange={(v) => setLocale(v ? "ar" : "en")} />
-            <span className="opacity-80 text-xs">AR</span>
+          {/* Modern Language Toggle - Segmented Control
+              
+              Features:
+              - Smooth animated selection indicator (300ms transition)
+              - Clear visual feedback: selected language highlighted in brand blue (#0d47a1)
+              - Keyboard accessible: Arrow keys navigate, Enter/Space selects
+              - Touch-friendly: Large tap targets (min 32px height) for mobile
+              - Responsive: Adapts to window resize automatically
+              - RTL-aware: Properly handles Arabic RTL layout and keyboard navigation
+              - Positioned at header edge for maximum accessibility
+              - Fully bilingual: Shows "English" and "العربية" with language icons
+              
+              Design:
+              - Compact segmented control with rounded corners
+              - White/dark background indicator slides smoothly between options
+              - Active state uses brand color for text
+              - Subtle shadow and border for depth
+              - Icons provide visual context without cluttering
+          */}
+          <div 
+            className="flex items-center"
+            dir={isAr ? "rtl" : "ltr"}
+            aria-label={t("Language selector", "محدد اللغة")}
+          >
+            <SegmentedControl
+              options={[
+                {
+                  value: "en",
+                  label: "English",
+                  icon: <UKFlag className="h-3.5 w-5 flex-shrink-0" />,
+                },
+                {
+                  value: "ar",
+                  label: "العربية",
+                  icon: <EgyptFlag className="h-3.5 w-5 flex-shrink-0" />,
+                },
+              ]}
+              value={isAr ? "ar" : "en"}
+              onChange={(val) => setLocale(val as "ar" | "en")}
+              size="sm"
+              ariaLabel={t("Select language", "اختر اللغة")}
+              className="shadow-xs border-zinc-300 dark:border-zinc-700"
+            />
           </div>
         </div>
       </div>

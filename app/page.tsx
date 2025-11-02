@@ -4,7 +4,8 @@ import Image from "next/image";
 import { useLocale } from "@/lib/locale-context";
 import { Button } from "@/components/ui/button";
 import { SiteLayout } from "@/components/layout/SiteLayout";
-import { Check } from "lucide-react";
+import { PlanActionButton } from "@/components/payments/PlanActionButton";
+import { Check, Brain, LayoutTemplate, FileDown, CreditCard } from "lucide-react";
 
 /**
  * Bilingual Landing Page for "Sera Pro - سيرة برو"
@@ -98,33 +99,47 @@ export default function Home() {
             )}
           </p>
           <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {/* Free */}
+            {/* Free Plan
+                Updated: Free plan now offers 3 templates (updated from 2 templates)
+            */}
             <div className="rounded-xl border p-6">
               <h3 className="text-lg font-semibold">{t("Free", "مجانية")}</h3>
               <p className="mt-1 text-3xl font-bold">EGP 0</p>
               <ul className="mt-4 space-y-2 text-sm text-zinc-700 dark:text-zinc-300">
-                {[t("1 basic CV", "سيرة أساسية واحدة"), t("2 templates", "قالبان"), t("Watermarked PDF", "ملف PDF بعلامة مائية")].map((f) => (
+                {[t("1 basic CV", "سيرة أساسية واحدة"), t("3 templates", "3 قوالب"), t("Watermarked PDF", "ملف PDF بعلامة مائية")].map((f) => (
                   <li key={f} className="flex items-center gap-2"><Check className="h-4 w-4" /><span>{f}</span></li>
                 ))}
               </ul>
-              <Button asChild className="mt-6 w-full text-white" style={{ backgroundColor: "#0d47a1" }}>
-                <Link href="/create-cv">{t("Create Free CV", "أنشئ سيرة مجانية")}</Link>
-              </Button>
+              {/* Free plan: Navigate to CV builder (no authentication required) */}
+              <PlanActionButton
+                product="free"
+                returnUrl="/"
+              />
             </div>
 
-            {/* One-Time Purchase */}
+            {/* One-Time Purchase Plan
+                Updated plan details (2024):
+                - Price: EGP 49 (fixed price, no longer variable)
+                - Features: 1 CV, 3 Templates, Unlimited Edits for 7 days
+                - Simplified offering for single CV creation needs
+            */}
             <div className="rounded-xl border p-6 ring-1" style={{ borderColor: "#d4af37", boxShadow: "0 0 0 1px #d4af37 inset" }}>
               <h3 className="text-lg font-semibold">{t("One-Time Purchase", "شراء لمرة واحدة")}</h3>
-              <p className="mt-1 text-3xl font-bold">EGP 49–79</p>
+              <p className="mt-1 text-3xl font-bold">EGP 49</p>
               <ul className="mt-4 space-y-2 text-sm text-zinc-700 dark:text-zinc-300">
-                {[t("Per CV, AI‑enhanced, ATS‑optimized", "لكل سيرة، محسنة بالذكاء الاصطناعي ومتوافقة مع أنظمة التتبع"), t("10+ templates", "أكثر من 10 قوالب"), t("Unlimited edits for 14 days", "تعديلات غير محدودة لمدة 14 يومًا"), t("No watermark", "بدون علامة مائية")].map((f) => (
+                {[
+                  t("1 CV", "سيرة واحدة"),
+                  t("3 Templates", "3 قوالب"),
+                  t("Unlimited edits for 7 days", "تعديلات غير محدودة لمدة 7 أيام")
+                ].map((f) => (
                   <li key={f} className="flex items-center gap-2"><Check className="h-4 w-4" /><span>{f}</span></li>
                 ))}
               </ul>
-              {/* TODO(payment): At checkout, select 49 or 79 tier based on template group */}
-              <Button asChild className="mt-6 w-full text-white" style={{ backgroundColor: "#0d47a1" }}>
-                <Link href="/api/payments/kashier/checkout?product=one_time">{t("Buy CV", "شراء سيرة")}</Link>
-              </Button>
+              {/* One-Time Purchase: Requires authentication, then initiates purchase flow */}
+              <PlanActionButton
+                product="one_time"
+                returnUrl="/"
+              />
             </div>
 
             {/* Flex Pack */}
@@ -136,10 +151,11 @@ export default function Home() {
                   <li key={f} className="flex items-center gap-2"><Check className="h-4 w-4" /><span>{f}</span></li>
                 ))}
               </ul>
-              {/* TODO(wallet): Deduct 1 credit per exported CV, show balance in dashboard */}
-              <Button asChild className="mt-6 w-full text-white" style={{ backgroundColor: "#0d47a1" }}>
-                <Link href="/api/payments/kashier/checkout?product=flex_pack">{t("Get Flex Pack", "شراء الباقة المرنة")}</Link>
-              </Button>
+              {/* Flex Pack: Requires authentication, then initiates pack purchase workflow */}
+              <PlanActionButton
+                product="flex_pack"
+                returnUrl="/"
+              />
             </div>
 
             {/* Annual Pass */}
@@ -151,10 +167,11 @@ export default function Home() {
                   <li key={f} className="flex items-center gap-2"><Check className="h-4 w-4" /><span>{f}</span></li>
                 ))}
               </ul>
-              {/* TODO(access): Grant pro scope; renew yearly; show renewal date */}
-              <Button asChild className="mt-6 w-full text-white" style={{ backgroundColor: "#0d47a1" }}>
-                <Link href="/api/payments/kashier/checkout?product=annual_pass">{t("Get Annual Pass", "الحصول على البطاقة السنوية")}</Link>
-              </Button>
+              {/* Annual Pass: Requires authentication, then initiates subscription purchase workflow */}
+              <PlanActionButton
+                product="annual_pass"
+                returnUrl="/"
+              />
             </div>
           </div>
 
@@ -167,7 +184,7 @@ export default function Home() {
               )}
             </p>
             <ul className="list-disc pl-5">
-              <li>{t("One-Time grants 14 days of unlimited edits for that CV.", "الشراء لمرة واحدة يمنح 14 يومًا من التعديلات غير المحدودة لتلك السيرة.")}</li>
+              <li>{t("One-Time grants 7 days of unlimited edits for that CV.", "الشراء لمرة واحدة يمنح 7 أيام من التعديلات غير المحدودة لتلك السيرة.")}</li>
               <li>{t("Flex Pack adds a wallet with CV credits you can spend anytime.", "الباقة المرنة تضيف محفظة برصيد سير يمكنك استخدامه في أي وقت.")}</li>
               <li>{t("Annual Pass unlocks pro tools and future features.", "البطاقة السنوية تفتح أدوات احترافية وميزات مستقبلية.")}</li>
             </ul>
@@ -175,22 +192,95 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Features section */}
+      {/* Features section
+          Displays four key features of Sera Pro with title and description:
+          1. AI CV analysis - Intelligent AI-powered analysis and suggestions
+          2. Professional templates - Professional, ATS-friendly CV templates
+          3. PDF download - Export your CV as high-quality PDF
+          4. Multiple payment options - Flexible payment via cards, e-wallets, Meeza, and more
+          
+          Each feature card includes:
+          - Gold-tinted icon (matching brand color #d4af37)
+          - Feature title (bold, prominent)
+          - Feature description (smaller text, explanatory)
+          
+          Cards are responsive: 1 column on mobile, 2 on tablet, 4 on desktop
+      */}
       <section className="px-4 py-10 sm:px-6 md:px-10">
         <div className="mx-auto max-w-6xl">
           <h2 className="text-2xl font-semibold text-start">{t("Features", "المميزات")}</h2>
           <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {[
-              t("AI CV analysis", "تحليل السيرة بالذكاء الاصطناعي"),
-              t("Professional templates", "قوالب احترافية"),
-              t("PDF download", "تنزيل PDF"),
-              t("Kashier payments", "مدفوعات كاشير"),
-            ].map((feat) => (
-              <div key={feat} className="rounded-xl border p-5 text-start">
-                <div className="h-8 w-8 rounded-md" style={{ backgroundColor: "#d4af37" }} />
-                <p className="mt-3 text-sm text-zinc-700 dark:text-zinc-300">{feat}</p>
-              </div>
-            ))}
+            {/* AI CV Analysis Feature */}
+            <div className="rounded-xl border p-5 text-start">
+              <Brain 
+                className="h-8 w-8" 
+                style={{ color: "#d4af37" }}
+                aria-hidden="true"
+              />
+              <h3 className="mt-3 font-semibold text-base text-zinc-900 dark:text-zinc-100">
+                {t("AI CV analysis", "تحليل السيرة بالذكاء الاصطناعي")}
+              </h3>
+              <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+                {t(
+                  "Get intelligent suggestions and analysis powered by AI to optimize your CV.",
+                  "احصل على اقتراحات وتحليل ذكي مدعوم بالذكاء الاصطناعي لتحسين سيرتك الذاتية."
+                )}
+              </p>
+            </div>
+
+            {/* Professional Templates Feature */}
+            <div className="rounded-xl border p-5 text-start">
+              <LayoutTemplate 
+                className="h-8 w-8" 
+                style={{ color: "#d4af37" }}
+                aria-hidden="true"
+              />
+              <h3 className="mt-3 font-semibold text-base text-zinc-900 dark:text-zinc-100">
+                {t("Professional templates", "قوالب احترافية")}
+              </h3>
+              <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+                {t(
+                  "Choose from ATS-friendly professional templates designed for modern recruiters.",
+                  "اختر من بين قوالب احترافية متوافقة مع أنظمة تتبع المتقدمين مصممة للمسؤولين عن التوظيف الحديثين."
+                )}
+              </p>
+            </div>
+
+            {/* PDF Download Feature */}
+            <div className="rounded-xl border p-5 text-start">
+              <FileDown 
+                className="h-8 w-8" 
+                style={{ color: "#d4af37" }}
+                aria-hidden="true"
+              />
+              <h3 className="mt-3 font-semibold text-base text-zinc-900 dark:text-zinc-100">
+                {t("PDF download", "تنزيل PDF")}
+              </h3>
+              <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+                {t(
+                  "Export your CV as a high-quality PDF file ready for job applications.",
+                  "صدّر سيرتك الذاتية كملف PDF عالي الجودة جاهز للتقديم على الوظائف."
+                )}
+              </p>
+            </div>
+
+            {/* Multiple Payment Options Feature */}
+            <div className="rounded-xl border p-5 text-start">
+              <CreditCard 
+                className="h-8 w-8" 
+                style={{ color: "#d4af37" }}
+                aria-hidden="true"
+              />
+              <h3 className="mt-3 font-semibold text-base text-zinc-900 dark:text-zinc-100">
+                {t("Multiple payment options", "خيارات دفع متعددة")}
+              </h3>
+              <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+                {t(
+                  "Pay securely using bank cards, e-wallets, Meeza cards, and other convenient payment methods.",
+                  "ادفع بأمان باستخدام بطاقات البنك، المحافظ الإلكترونية، بطاقات ميزة، وطرق دفع أخرى مريحة."
+                )}
+              </p>
+            </div>
           </div>
         </div>
       </section>

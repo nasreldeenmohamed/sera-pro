@@ -55,8 +55,9 @@ type KashierPaymentModalProps = {
 };
 
 // Pricing map matching API route
+// Updated 2024: one_time price changed from 79 to 49 EGP
 const PRICING: Record<Product, number> = {
-  one_time: 79,
+  one_time: 49, // Single CV purchase: 1 CV, 3 templates, 7 days edits
   flex_pack: 149,
   annual_pass: 299,
 };

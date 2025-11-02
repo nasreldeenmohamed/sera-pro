@@ -55,19 +55,18 @@ export function PlanCards({ currentPlan, onPurchase }: { currentPlan: UserPlan |
     {
       product: "one_time",
       name: { en: "Single CV Purchase", ar: "شراء سيرة واحدة" },
-      price: 79,
+      price: 49,
       currency: "EGP",
       description: {
-        en: "Perfect for one-time needs. Get a professional CV with AI enhancement and premium templates.",
-        ar: "مثالي للاحتياجات لمرة واحدة. احصل على سيرة احترافية مع تحسين بالذكاء الاصطناعي وقوالب مميزة.",
+        en: "Perfect for one-time needs. Get a professional CV with 3 templates and 7 days of unlimited edits.",
+        ar: "مثالي للاحتياجات لمرة واحدة. احصل على سيرة احترافية مع 3 قوالب و 7 أيام من التعديلات غير المحدودة.",
       },
       icon: <Zap className="h-5 w-5" />,
       color: "#0d47a1",
       features: [
-        { en: "1 AI-enhanced CV", ar: "سيرة واحدة محسّنة بالذكاء الاصطناعي" },
-        { en: "All premium templates", ar: "جميع القوالب المميزة" },
-        { en: "14 days editing access", ar: "الوصول للتعديل لمدة 14 يومًا", tooltip: { en: "You can edit and re-download your CV for 14 days after purchase", ar: "يمكنك تعديل وإعادة تنزيل سيرتك لمدة 14 يومًا بعد الشراء" } },
-        { en: "PDF download (no watermark)", ar: "تنزيل PDF بدون علامة مائية" },
+        { en: "1 CV", ar: "سيرة واحدة" },
+        { en: "3 Templates", ar: "3 قوالب" },
+        { en: "Unlimited edits for 7 days", ar: "تعديلات غير محدودة لمدة 7 أيام", tooltip: { en: "You can edit and re-download your CV for 7 days after purchase", ar: "يمكنك تعديل وإعادة تنزيل سيرتك لمدة 7 أيام بعد الشراء" } },
       ],
       highlights: [
         { en: "One-time payment", ar: "دفعة واحدة" },
