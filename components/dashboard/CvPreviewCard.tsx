@@ -122,13 +122,6 @@ export function CvPreviewCard({
             <Trash2 className="h-3.5 w-3.5" />
           </Button>
         </div>
-
-        {/* Watermark Badge */}
-        {requiresWatermark && (
-          <Badge variant="outline" className="text-xs w-full justify-center">
-            {t("Downloads include watermark", "التنزيلات تتضمن علامة مائية")}
-          </Badge>
-        )}
       </CardContent>
     </Card>
   );

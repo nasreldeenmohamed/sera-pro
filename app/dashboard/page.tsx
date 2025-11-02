@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { listUserCvs, deleteUserCv, getUserPlan, getUserDraft, getUserCv, type UserCv, type UserPlan, type CvDraftData } from "@/firebase/firestore";
+import { listUserCvs, deleteUserCv, getUserPlan, getUserDraft, getUserCv, checkAndUpdateSubscriptionStatus, type UserCv, type UserPlan, type CvDraftData } from "@/firebase/firestore";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -106,36 +106,44 @@ export default function DashboardPage() {
     };
   }, [user, fetchCvs]);
 
-  /**
-   * Asynchronously fetch user plan from Firestore
-   * Separate from CV fetch to allow independent loading states
-   */
-  useEffect(() => {
-    async function fetchPlan() {
-      if (!user) {
-        setPlanLoading(false);
-        return;
-      }
+         /**
+          * Asynchronously fetch user plan from Firestore
+          * Separate from CV fetch to allow independent loading states
+          * Also checks and updates subscription status on dashboard load
+          */
+         useEffect(() => {
+           async function fetchPlan() {
+             if (!user) {
+               setPlanLoading(false);
+               return;
+             }
 
-      setPlanLoading(true);
-      try {
-        const p = await getUserPlan(user.uid);
-        setPlan(p);
-      } catch (error: any) {
-        console.error("[Dashboard] Failed to fetch plan:", error);
-        // Plan fetch failure is non-critical - user can still use dashboard
-        setPlan(null);
-      } finally {
-        setPlanLoading(false);
-      }
-    }
+             setPlanLoading(true);
+             try {
+               // Check and update subscription status first
+               await checkAndUpdateSubscriptionStatus(user.uid);
+               
+               // Then fetch the plan (which reads from subscription)
+               const p = await getUserPlan(user.uid);
+               setPlan(p);
+             } catch (error: any) {
+               console.error("[Dashboard] Failed to fetch plan:", error);
+               // Plan fetch failure is non-critical - user can still use dashboard
+               setPlan(null);
+             } finally {
+               setPlanLoading(false);
+             }
+           }
 
-    fetchPlan();
-  }, [user]);
+           fetchPlan();
+         }, [user]);
 
   // Determine if user should see watermark on downloads
+  // Free plan: requires watermark
+  // One-time plan: NO watermark (paid feature)
+  // Flex pack and annual pass: NO watermark (paid features)
   const requiresWatermark = useMemo(() => {
-    return !plan || plan.planType === "free" || plan.planType === "one_time";
+    return !plan || plan.planType === "free";
   }, [plan]);
 
   // Filter CVs based on plan - free/one_time users see only their first CV
@@ -275,11 +283,6 @@ export default function DashboardPage() {
     }
   }, [plan, isAr]);
 
-  const canCreate = useMemo(() => {
-    if (!plan) return true; // free can create basic/watermarked; gating later
-    if (plan.planType === "flex_pack") return (plan.creditsRemaining ?? 0) > 0;
-    return true;
-  }, [plan]);
 
   // Show loading state while authenticating
   if (loading || !user) {
@@ -334,17 +337,6 @@ export default function DashboardPage() {
           </CardHeader>
         </Card>
 
-        {/* Actions */}
-        <div className="mb-6 flex flex-col gap-3 sm:flex-row">
-          <Button 
-            disabled={!canCreate} 
-            onClick={() => router.push("/create-cv")} 
-            className="text-white" 
-            style={{ backgroundColor: "#0d47a1" }}
-          >
-            {t("Create New CV", "إنشاء سيرة جديدة")}
-          </Button>
-        </div>
 
         {/* CVs List - Fetched from Firestore, filtered by plan */}
         <div className="mb-8">

@@ -3,7 +3,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { User } from "firebase/auth";
 import { subscribeToAuthState, signOutUser, getGoogleRedirectResult } from "@/firebase/auth";
 import { isFirebaseConfigured } from "@/firebase/client";
-import { saveUserProfile } from "@/firebase/firestore";
+import { saveUserProfile, checkAndUpdateSubscriptionStatus } from "@/firebase/firestore";
 
 type AuthContextValue = {
   user: User | null;
@@ -90,10 +90,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     
     console.log("[AuthProvider] Setting up auth state subscription...");
-    const unsubscribe = subscribeToAuthState((u) => {
+    const unsubscribe = subscribeToAuthState(async (u) => {
       console.log("[AuthProvider] Auth state changed:", u ? `User: ${u.uid}` : "No user");
       setUser(u);
       setLoading(false);
+      
+      // Check and update subscription status on login
+      if (u) {
+        try {
+          await checkAndUpdateSubscriptionStatus(u.uid);
+          console.log("[AuthProvider] Subscription status checked on login");
+        } catch (error) {
+          console.error("[AuthProvider] Failed to check subscription status:", error);
+          // Non-critical error - continue with login
+        }
+      }
     });
     return unsubscribe;
   }, [handlingRedirect]);

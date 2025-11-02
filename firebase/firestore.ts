@@ -1,19 +1,50 @@
 // Firestore helpers to store user CVs in a collection.
 import { getFirebaseApp } from "./client";
-import { getFirestore, collection, addDoc, serverTimestamp, getDocs, query, where, deleteDoc, doc, getDoc, updateDoc, setDoc } from "firebase/firestore";
+import { getFirestore, collection, addDoc, serverTimestamp, getDocs, query, where, deleteDoc, doc, getDoc, updateDoc, setDoc, orderBy, Timestamp } from "firebase/firestore";
 
-// User profile type
+/**
+ * Subscription object embedded in user profile
+ * Tracks user's plan, status, and billing information
+ */
+export type UserSubscription = {
+  plan: "free" | "one_time" | "flex_pack" | "annual_pass";
+  status: "active" | "inactive" | "cancelled" | "expired";
+  startDate: any; // Firestore Timestamp
+  expirationDate?: any; // Firestore Timestamp - when subscription expires (not set for free plan - never expires)
+  renewalDate?: any; // Firestore Timestamp (for recurring plans)
+  paymentMethod?: string; // Payment method identifier
+  lastPaymentDate?: any; // Firestore Timestamp
+  nextBillingDate?: any; // Firestore Timestamp (for recurring plans)
+  creditsRemaining?: number; // For flex_pack plans
+  validUntil?: any; // Firestore Timestamp (for time-limited plans)
+};
+
+// User profile type with embedded subscription
 export type UserProfile = {
   name: string;
   phone?: string;
   email: string;
   createdAt?: any;
   updatedAt?: any;
+  subscription?: UserSubscription; // Subscription object nested in profile
 };
 
-// Create or update user profile in Firestore
-// Stores profile data in userProfiles/{uid} collection
-export async function saveUserProfile(userId: string, profile: { name: string; phone?: string; email: string }) {
+/**
+ * Create or update user profile in Firestore
+ * 
+ * Stores profile data in /userProfiles/{uid} collection.
+ * On first creation, initializes a default "free" subscription.
+ * Subsequent updates preserve existing subscription data (unless explicitly provided).
+ * 
+ * @param userId - User's Firebase Auth UID
+ * @param profile - Profile data to save (name, phone, email)
+ * @param subscription - Optional subscription data (if provided, updates subscription)
+ */
+export async function saveUserProfile(
+  userId: string, 
+  profile: { name: string; phone?: string; email: string },
+  subscription?: Partial<UserSubscription>
+) {
   const db = getFirestore(getFirebaseApp());
   const ref = doc(db, "userProfiles", userId);
   
@@ -21,19 +52,154 @@ export async function saveUserProfile(userId: string, profile: { name: string; p
   const existing = await getDoc(ref);
   const isNew = !existing.exists();
   
+  // Get existing subscription if profile exists, or create default subscription for new users
+  let subscriptionData: UserSubscription;
+  
+  if (isNew) {
+    // Initialize default "free" subscription for new users
+    // Free plan: Never expires (no expirationDate)
+    subscriptionData = {
+      plan: "free",
+      status: "active",
+      startDate: serverTimestamp(),
+      // expirationDate is not set for free plans - they never expire
+    };
+  } else {
+    // Preserve existing subscription or merge with provided updates
+    const existingData = existing.data() as UserProfile;
+    const existingSubscription = existingData.subscription;
+    
+    if (subscription) {
+      // Update subscription with provided data
+      const planType = subscription.plan || existingSubscription?.plan || "free";
+      
+      subscriptionData = {
+        plan: planType,
+        status: subscription.status || existingSubscription?.status || "active",
+        startDate: subscription.startDate || existingSubscription?.startDate || serverTimestamp(),
+        // Free plan never expires - don't set expirationDate
+        // Other plans use provided expirationDate or existing one
+        expirationDate: planType === "free" 
+          ? undefined // Free plan never expires
+          : (subscription.expirationDate ?? existingSubscription?.expirationDate),
+        renewalDate: subscription.renewalDate ?? existingSubscription?.renewalDate,
+        paymentMethod: subscription.paymentMethod ?? existingSubscription?.paymentMethod,
+        lastPaymentDate: subscription.lastPaymentDate ?? existingSubscription?.lastPaymentDate,
+        nextBillingDate: subscription.nextBillingDate ?? existingSubscription?.nextBillingDate,
+        creditsRemaining: subscription.creditsRemaining ?? existingSubscription?.creditsRemaining,
+        validUntil: subscription.validUntil ?? existingSubscription?.validUntil,
+      };
+    } else {
+      // Keep existing subscription unchanged
+      subscriptionData = existingSubscription || {
+        plan: "free",
+        status: "active",
+        startDate: existingData.createdAt || serverTimestamp(),
+        // Free plan never expires - no expirationDate
+      };
+    }
+  }
+  
   await setDoc(ref, {
     ...profile,
+    subscription: subscriptionData,
     ...(isNew ? { createdAt: serverTimestamp() } : {}),
     updatedAt: serverTimestamp(),
   }, { merge: true });
 }
 
-// Get user profile from Firestore
+/**
+ * Get user profile from Firestore
+ * 
+ * @param userId - User's Firebase Auth UID
+ * @returns UserProfile or null if not found
+ */
 export async function getUserProfile(userId: string): Promise<UserProfile | null> {
   const db = getFirestore(getFirebaseApp());
   const snapshot = await getDoc(doc(db, "userProfiles", userId));
   if (!snapshot.exists()) return null;
   return snapshot.data() as UserProfile;
+}
+
+/**
+ * Check and update subscription status based on expiration date
+ * 
+ * Compares current date/time against subscription.expirationDate:
+ * - Free plan: Never expires, always returns "active"
+ * - Other plans: If now ≤ expirationDate: Set status as "active"
+ * - Other plans: If now > expirationDate: Set status to "expired"
+ * 
+ * Updates Firestore document if status needs to change.
+ * 
+ * @param userId - User's Firebase Auth UID
+ * @returns Updated subscription status ("active" | "expired")
+ */
+export async function checkAndUpdateSubscriptionStatus(userId: string): Promise<"active" | "expired"> {
+  const profile = await getUserProfile(userId);
+  if (!profile || !profile.subscription) {
+    return "active"; // Default to active if no subscription
+  }
+
+  const subscription = profile.subscription;
+  
+  // Free plan never expires - always return active
+  if (subscription.plan === "free") {
+    // Ensure status is active for free plans (in case it was incorrectly set)
+    if (subscription.status !== "active") {
+      const db = getFirestore(getFirebaseApp());
+      const profileRef = doc(db, "userProfiles", userId);
+      await updateDoc(profileRef, {
+        "subscription.status": "active",
+        updatedAt: serverTimestamp(),
+      });
+      console.log(`[Subscription] Fixed free plan status for user ${userId}: ${subscription.status} -> active`);
+    }
+    return "active";
+  }
+  
+  // For paid plans, check expiration date
+  if (!subscription.expirationDate) {
+    // No expiration date for paid plan means it doesn't expire (active)
+    return "active";
+  }
+
+  const now = new Date();
+  
+  // Convert Firestore Timestamp to JavaScript Date if needed
+  let expirationDate: Date;
+  if (subscription.expirationDate.toDate) {
+    // Firestore Timestamp
+    expirationDate = subscription.expirationDate.toDate();
+  } else if (subscription.expirationDate instanceof Date) {
+    expirationDate = subscription.expirationDate;
+  } else if (typeof subscription.expirationDate === "string") {
+    expirationDate = new Date(subscription.expirationDate);
+  } else if (subscription.expirationDate.seconds) {
+    // Firestore Timestamp format { seconds, nanoseconds }
+    expirationDate = new Date(subscription.expirationDate.seconds * 1000);
+  } else {
+    // Fallback: assume it's valid (active)
+    return "active";
+  }
+
+  // Compare dates
+  const isExpired = now > expirationDate;
+  const newStatus = isExpired ? "expired" : "active";
+
+  // Update Firestore if status changed
+  if (subscription.status !== newStatus) {
+    const db = getFirestore(getFirebaseApp());
+    const profileRef = doc(db, "userProfiles", userId);
+    
+    await updateDoc(profileRef, {
+      "subscription.status": newStatus,
+      updatedAt: serverTimestamp(),
+    });
+    
+    console.log(`[Subscription] Updated status for user ${userId}: ${subscription.status} -> ${newStatus}`);
+  }
+
+  return newStatus;
 }
 
 export async function saveCvDraft(userId: string, payload: { fullName: string; summary: string }) {
@@ -47,45 +213,119 @@ export async function saveCvDraft(userId: string, payload: { fullName: string; s
   });
 }
 
+/**
+ * UserCv type - Represents a CV stored in Firestore
+ * 
+ * Structure: /drafts/{userId}/cvs/{cvId}
+ * Each user can have multiple CVs stored as sub-documents
+ */
 export type UserCv = {
   id: string;
   fullName: string;
   summary: string;
+  title?: string;
+  templateKey?: string;
+  cvLanguage?: "ar" | "en";
   createdAt?: any;
   updatedAt?: any;
+  // Include all CvDraftData fields for compatibility
+  contact?: {
+    email?: string;
+    phone?: string;
+    location?: string;
+    website?: string;
+  };
+  experience?: Array<{
+    company: string;
+    role: string;
+    startDate: string;
+    endDate?: string;
+    description?: string;
+  }>;
+  education?: Array<{
+    school: string;
+    degree: string;
+    startDate: string;
+    endDate?: string;
+  }>;
+  skills?: string[];
+  languages?: string[];
+  certifications?: string[];
 };
 
+/**
+ * List all CVs for a user from /drafts/{userId}/ sub-collection
+ * 
+ * @param userId - User's Firebase Auth UID
+ * @returns Array of CV documents sorted by updatedAt (newest first)
+ */
 export async function listUserCvs(userId: string): Promise<UserCv[]> {
   const db = getFirestore(getFirebaseApp());
-  const ref = collection(db, "cvDrafts");
-  const q = query(ref, where("userId", "==", userId));
+  // Query sub-collection: /drafts/{userId}/
+  const ref = collection(db, "drafts", userId, "cvs");
+  // Order by updatedAt descending (most recently updated first)
+  const q = query(ref, orderBy("updatedAt", "desc"));
   const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
+  return snap.docs.map((d) => ({ 
+    id: d.id, 
+    ...(d.data() as any) 
+  }));
 }
 
+/**
+ * Delete a CV from /drafts/{userId}/{cvId}
+ * 
+ * @param userId - User's Firebase Auth UID
+ * @param cvId - CV document ID to delete
+ */
 export async function deleteUserCv(userId: string, cvId: string) {
   // TODO(authz): ensure cv belongs to user on server-side when adding API endpoints
   const db = getFirestore(getFirebaseApp());
-  await deleteDoc(doc(db, "cvDrafts", cvId));
+  // Delete from sub-collection: /drafts/{userId}/cvs/{cvId}
+  await deleteDoc(doc(db, "drafts", userId, "cvs", cvId));
 }
 
+/**
+ * Get a specific CV from /drafts/{userId}/cvs/{cvId}
+ * 
+ * @param userId - User's Firebase Auth UID
+ * @param cvId - CV document ID
+ * @returns CV data or null if not found
+ */
 export async function getUserCv(userId: string, cvId: string): Promise<UserCv | null> {
   const db = getFirestore(getFirebaseApp());
-  const snapshot = await getDoc(doc(db, "cvDrafts", cvId));
+  // Fetch from sub-collection: /drafts/{userId}/cvs/{cvId}
+  const snapshot = await getDoc(doc(db, "drafts", userId, "cvs", cvId));
   if (!snapshot.exists()) return null;
   const data = snapshot.data() as any;
-  if (data.userId !== userId) return null;
+  // No need to check userId since path already enforces ownership
   return { id: snapshot.id, ...data } as UserCv;
 }
 
-export async function updateCvDraft(userId: string, cvId: string, payload: Partial<UserCv> & Record<string, any>) {
+/**
+ * Update an existing CV in /drafts/{userId}/cvs/{cvId}
+ * 
+ * @param userId - User's Firebase Auth UID
+ * @param cvId - CV document ID to update
+ * @param payload - Partial CV data to update
+ */
+export async function updateCvDraft(userId: string, cvId: string, payload: Partial<CvDraftData> & Record<string, any>) {
   const db = getFirestore(getFirebaseApp());
-  const ref = doc(db, "cvDrafts", cvId);
+  // Update in sub-collection: /drafts/{userId}/cvs/{cvId}
+  const ref = doc(db, "drafts", userId, "cvs", cvId);
   // TODO(authz): validate ownership server-side for production
-  await updateDoc(ref, { ...payload, userId, updatedAt: serverTimestamp() });
+  await updateDoc(ref, { 
+    ...payload, 
+    updatedAt: serverTimestamp() 
+  });
 }
 
-// Canonical plan fields written by payment flows (TODO: write after checkout)
+/**
+ * UserPlan type - Legacy compatibility type
+ * 
+ * Now reads from subscription object in user profile.
+ * This type is maintained for backward compatibility with existing code.
+ */
 export type UserPlan = {
   planType: "free" | "one_time" | "flex_pack" | "annual_pass";
   creditsRemaining?: number; // for flex pack
@@ -93,54 +333,145 @@ export type UserPlan = {
   lastPurchaseDate?: any;
 };
 
+/**
+ * Get user's plan information
+ * 
+ * Reads from subscription object in user profile document.
+ * Falls back to "free" plan if no subscription exists.
+ * 
+ * @param userId - User's Firebase Auth UID
+ * @returns UserPlan object or null if profile doesn't exist
+ */
 export async function getUserPlan(userId: string): Promise<UserPlan | null> {
-  const db = getFirestore(getFirebaseApp());
-  const planDoc = await getDoc(doc(db, "userPlans", userId));
-  if (!planDoc.exists()) return null;
-  return planDoc.data() as any;
+  const profile = await getUserProfile(userId);
+  if (!profile) return null;
+  
+  // Read from subscription object in profile
+  const subscription = profile.subscription;
+  if (!subscription) {
+    // Return default free plan if no subscription exists
+    return {
+      planType: "free",
+      creditsRemaining: undefined,
+      validUntil: undefined,
+      lastPurchaseDate: undefined,
+    };
+  }
+  
+  // Convert subscription to UserPlan format for backward compatibility
+  return {
+    planType: subscription.plan,
+    creditsRemaining: subscription.creditsRemaining,
+    validUntil: subscription.validUntil,
+    lastPurchaseDate: subscription.lastPaymentDate,
+  };
 }
 
-// Upserts user's plan after payment. Server-only usage recommended in real flow.
+/**
+ * Update user's subscription after payment
+ * 
+ * Updates the subscription object in the user's profile document.
+ * Sets plan, credits, and billing information based on purchased product.
+ * 
+ * @param userId - User's Firebase Auth UID
+ * @param product - Product type purchased: "one_time" | "flex_pack" | "annual_pass"
+ */
 export async function setUserPlanFromProduct(userId: string, product: "one_time" | "flex_pack" | "annual_pass") {
   const db = getFirestore(getFirebaseApp());
-  const ref = doc(db, "userPlans", userId);
+  const profileRef = doc(db, "userProfiles", userId);
   const now = serverTimestamp();
-  // Simplified rules; TODO(payment): set real validity based on transaction details
+  
+  // Get existing profile to preserve other fields
+  const existing = await getDoc(profileRef);
+  const existingData = existing.exists() ? (existing.data() as UserProfile) : null;
+  const existingSubscription = existingData?.subscription;
+  
+  // Prepare subscription update based on product type
+  let subscriptionUpdate: Partial<UserSubscription>;
+  
+  const nowMs = Date.now();
+  
   if (product === "flex_pack") {
-    await updateDoc(ref, {
-      planType: "flex_pack",
+    // Flex Pack: 6 months validity
+    const sixMonthsInMs = 6 * 30 * 24 * 60 * 60 * 1000;
+    const expirationDate = Timestamp.fromMillis(nowMs + sixMonthsInMs);
+    
+    subscriptionUpdate = {
+      plan: "flex_pack",
+      status: "active",
       creditsRemaining: 5,
-      validUntil: null,
-      lastPurchaseDate: now,
-    }).catch(async () => {
-      await setDoc(ref, { planType: "flex_pack", creditsRemaining: 5, validUntil: null, lastPurchaseDate: now } as any);
-    });
+      lastPaymentDate: now,
+      startDate: existingSubscription?.startDate || now,
+      expirationDate: expirationDate,
+    };
   } else if (product === "one_time") {
-    // 14-day window placeholder; TODO: server sets exact timestamp
-    await updateDoc(ref, {
-      planType: "one_time",
-      creditsRemaining: null,
-      validUntil: null,
-      lastPurchaseDate: now,
-    }).catch(async () => {
-      await setDoc(ref, { planType: "one_time", creditsRemaining: null, validUntil: null, lastPurchaseDate: now } as any);
-    });
+    // One-time purchase: 7-day validity period
+    const sevenDaysInMs = 7 * 24 * 60 * 60 * 1000;
+    const expirationDate = Timestamp.fromMillis(nowMs + sevenDaysInMs);
+    
+    subscriptionUpdate = {
+      plan: "one_time",
+      status: "active",
+      creditsRemaining: undefined,
+      validUntil: expirationDate,
+      lastPaymentDate: now,
+      startDate: existingSubscription?.startDate || now,
+      expirationDate: expirationDate,
+    };
   } else if (product === "annual_pass") {
-    await updateDoc(ref, {
-      planType: "annual_pass",
-      creditsRemaining: null,
-      validUntil: null,
-      lastPurchaseDate: now,
-    }).catch(async () => {
-      await setDoc(ref, { planType: "annual_pass", creditsRemaining: null, validUntil: null, lastPurchaseDate: now } as any);
-    });
+    // Annual Pass: 1 year validity
+    const oneYearInMs = 365 * 24 * 60 * 60 * 1000;
+    const expirationDate = Timestamp.fromMillis(nowMs + oneYearInMs);
+    const renewalDate = Timestamp.fromMillis(nowMs + oneYearInMs);
+    const nextBillingDate = Timestamp.fromMillis(nowMs + oneYearInMs);
+    
+    subscriptionUpdate = {
+      plan: "annual_pass",
+      status: "active",
+      creditsRemaining: undefined,
+      lastPaymentDate: now,
+      renewalDate: renewalDate,
+      nextBillingDate: nextBillingDate,
+      startDate: existingSubscription?.startDate || now,
+      expirationDate: expirationDate,
+    };
+  } else {
+    throw new Error(`Invalid product type: ${product}`);
   }
+  
+  // Merge subscription update with existing subscription
+  const updatedSubscription: UserSubscription = {
+    ...(existingSubscription || {
+      plan: "free",
+      status: "active",
+      startDate: now,
+    }),
+    ...subscriptionUpdate,
+  };
+  
+  // Update profile with new subscription
+  await updateDoc(profileRef, {
+    subscription: updatedSubscription,
+    updatedAt: serverTimestamp(),
+  }).catch(async () => {
+    // If profile doesn't exist, create it (shouldn't happen but handle gracefully)
+    if (!existingData) {
+      throw new Error(`User profile not found for userId: ${userId}. Please ensure profile is created during registration.`);
+    }
+    // Retry with setDoc if updateDoc fails
+    await setDoc(profileRef, {
+      ...existingData,
+      subscription: updatedSubscription,
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+  });
 }
 
 // ============================================================================
-// CV DRAFT FUNCTIONS
+// CV DRAFT FUNCTIONS - Multiple CVs per user structure
 // ============================================================================
-// Single draft per user stored at /drafts/{userId}
+// Multiple CVs per user stored at /drafts/{userId}/cvs/{cvId}
+// Each CV is a separate document with auto-generated ID
 // Contains all CV form data including personal details, experience, education,
 // skills, languages, certifications, template selection, and timestamps
 
@@ -177,45 +508,108 @@ export type CvDraftData = {
 };
 
 /**
- * Saves or updates a single draft per user at /drafts/{userId}
- * Overwrites existing draft if present (single draft per user policy)
+ * Save or update a CV draft in /drafts/{userId}/cvs/{cvId}
+ * 
+ * If cvId is provided, updates existing CV. Otherwise, creates new CV with auto-generated ID.
+ * 
  * @param userId - User's Firebase Auth UID
  * @param draftData - Complete CV form data to save
- * @returns Promise resolving when save is complete
+ * @param cvId - Optional CV ID. If provided, updates existing CV. If null/undefined, creates new CV.
+ * @returns Promise resolving with the CV document ID
  */
-export async function saveUserDraft(userId: string, draftData: CvDraftData): Promise<void> {
+export async function saveUserDraft(userId: string, draftData: CvDraftData, cvId?: string | null): Promise<string> {
   const db = getFirestore(getFirebaseApp());
-  const ref = doc(db, "drafts", userId);
   
-  const existing = await getDoc(ref);
-  const isNew = !existing.exists();
-  
-  await setDoc(ref, {
-    ...draftData,
-    ...(isNew ? { createdAt: serverTimestamp() } : {}),
-    updatedAt: serverTimestamp(),
-  }, { merge: false }); // Overwrite completely (single draft per user)
+  if (cvId) {
+    // Update existing CV in sub-collection: /drafts/{userId}/cvs/{cvId}
+    const ref = doc(db, "drafts", userId, "cvs", cvId);
+    await updateDoc(ref, {
+      ...draftData,
+      updatedAt: serverTimestamp(),
+    });
+    return cvId;
+  } else {
+    // Create new CV in sub-collection: /drafts/{userId}/cvs/{autoId}
+    const ref = collection(db, "drafts", userId, "cvs");
+    const newDoc = await addDoc(ref, {
+      ...draftData,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    return newDoc.id;
+  }
 }
 
 /**
- * Retrieves the user's draft from /drafts/{userId}
+ * Retrieves the first/only CV draft for a user (legacy compatibility)
+ * Used for free/single CV plans to get their one allowed CV
+ * 
  * @param userId - User's Firebase Auth UID
- * @returns Draft data or null if no draft exists
+ * @returns First CV draft data or null if no CV exists
  */
 export async function getUserDraft(userId: string): Promise<CvDraftData | null> {
-  const db = getFirestore(getFirebaseApp());
-  const snapshot = await getDoc(doc(db, "drafts", userId));
-  if (!snapshot.exists()) return null;
-  return snapshot.data() as CvDraftData;
+  const cvs = await listUserCvs(userId);
+  if (cvs.length === 0) return null;
+  // Return the first (most recently updated) CV
+  const firstCv = cvs[0];
+  // Convert UserCv to CvDraftData format
+  return {
+    fullName: firstCv.fullName || "",
+    title: firstCv.title,
+    summary: firstCv.summary || "",
+    contact: firstCv.contact || { email: "", phone: "", location: "", website: "" },
+    experience: firstCv.experience || [],
+    education: firstCv.education || [],
+    skills: firstCv.skills || [],
+    languages: firstCv.languages || [],
+    certifications: firstCv.certifications || [],
+    templateKey: firstCv.templateKey || "classic",
+    cvLanguage: firstCv.cvLanguage || "en",
+    createdAt: firstCv.createdAt,
+    updatedAt: firstCv.updatedAt,
+  };
 }
 
 /**
- * Deletes the user's draft from /drafts/{userId}
+ * Get a specific CV draft by ID from /drafts/{userId}/cvs/{cvId}
+ * 
+ * @param userId - User's Firebase Auth UID
+ * @param cvId - CV document ID
+ * @returns CV draft data or null if not found
+ */
+export async function getUserDraftById(userId: string, cvId: string): Promise<CvDraftData | null> {
+  const cv = await getUserCv(userId, cvId);
+  if (!cv) return null;
+  
+  // Convert UserCv to CvDraftData format
+  return {
+    fullName: cv.fullName || "",
+    title: cv.title,
+    summary: cv.summary || "",
+    contact: cv.contact || { email: "", phone: "", location: "", website: "" },
+    experience: cv.experience || [],
+    education: cv.education || [],
+    skills: cv.skills || [],
+    languages: cv.languages || [],
+    certifications: cv.certifications || [],
+    templateKey: cv.templateKey || "classic",
+    cvLanguage: cv.cvLanguage || "en",
+    createdAt: cv.createdAt,
+    updatedAt: cv.updatedAt,
+  };
+}
+
+/**
+ * Deletes the user's first/only draft (legacy compatibility)
+ * For free/single CV plans
+ * 
  * @param userId - User's Firebase Auth UID
  */
 export async function deleteUserDraft(userId: string): Promise<void> {
-  const db = getFirestore(getFirebaseApp());
-  await deleteDoc(doc(db, "drafts", userId));
+  const cvs = await listUserCvs(userId);
+  if (cvs.length > 0) {
+    await deleteUserCv(userId, cvs[0].id);
+  }
 }
 
 

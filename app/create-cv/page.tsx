@@ -20,7 +20,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { saveUserDraft, getUserDraft, getUserPlan, type CvDraftData, type UserPlan } from "@/firebase/firestore";
+import { saveUserDraft, getUserDraft, getUserPlan, getUserDraftById, type CvDraftData, type UserPlan } from "@/firebase/firestore";
 // PDF download functionality removed from builder - only available after payment
 // import { ClassicTemplate } from "@/components/pdf/Templates";
 // import { downloadPdf } from "@/lib/pdf";
@@ -336,7 +336,7 @@ function CreateCvPageContent() {
           // Also migrate guest draft to user account if exists
           if (hasGuestDraft()) {
             migrateGuestDraft(user.uid, async (uid, data) => {
-              await saveUserDraft(uid, data as CvDraftData);
+              await saveUserDraft(uid, data as CvDraftData, null); // Create new CV from guest draft
             }).catch((err) => {
               console.error("Failed to migrate guest draft:", err);
             });
@@ -363,38 +363,41 @@ function CreateCvPageContent() {
         }
 
         try {
-          // Import getUserCv for editing existing CVs
-          const { getUserCv } = await import("@/firebase/firestore");
-          const data = await getUserCv(user.uid, cvId);
+          // Load CV by ID using getUserDraftById for proper data structure
+          const data = await getUserDraftById(user.uid, cvId);
           if (data) {
             form.reset({
-              fullName: (data as any).fullName || "",
-              title: (data as any).title || "",
-              summary: (data as any).summary || "",
-              contact: (data as any).contact || { email: "", phone: "", location: "", website: "" },
-              experience: (data as any).experience || [],
-              education: (data as any).education || [],
-              skills: (data as any).skills || [],
-              languages: (data as any).languages || [],
-              certifications: (data as any).certifications || [],
-              templateKey: (data as any).templateKey || "classic",
-              cvLanguage: (data as any).cvLanguage || "en", // Restore CV language from saved data
+              fullName: data.fullName || "",
+              title: data.title || "",
+              summary: data.summary || "",
+              contact: data.contact || { email: "", phone: "", location: "", website: "" },
+              experience: data.experience || [],
+              education: data.education || [],
+              skills: data.skills || [],
+              languages: data.languages || [],
+              certifications: data.certifications || [],
+              templateKey: data.templateKey || "classic",
+              cvLanguage: data.cvLanguage || "en", // Restore CV language from saved data
             });
             // Set present states for experience entries
             const importedPresentStates: Record<number, boolean> = {};
-            ((data as any).experience || []).forEach((exp: any, expIdx: number) => {
+            (data.experience || []).forEach((exp: any, expIdx: number) => {
               if (!exp.endDate || exp.endDate.trim() === "") {
                 importedPresentStates[expIdx] = true;
               }
             });
             setPresentStates(importedPresentStates);
             // Set template and move to Personal Info step (step 4)
-            setSelectedTemplate((data as any).templateKey || "classic");
+            setSelectedTemplate(data.templateKey || "classic");
             setCurrentStep(4);
             hasLoadedDraft.current = true;
+            setDraftExists(true); // Mark draft as existing for edit mode
           }
         } catch (error) {
           console.error("Failed to load CV:", error);
+          setDraftStatus("error");
+          setDraftMessage(t("Failed to load CV. Please try again.", "فشل تحميل السيرة. يرجى المحاولة مرة أخرى."));
+          setTimeout(() => setDraftStatus("idle"), 3000);
         }
         return; // Don't load draft if editing specific CV
       }
@@ -471,7 +474,7 @@ function CreateCvPageContent() {
               hasLoadedDraft.current = true;
               // Migrate guest draft to cloud
               await migrateGuestDraft(user.uid, async (uid, data) => {
-                await saveUserDraft(uid, data as CvDraftData);
+                await saveUserDraft(uid, data as CvDraftData, null); // Create new CV from guest draft
               });
               setDraftStatus("success");
               setDraftMessage(t("Guest draft migrated to your account.", "تم نقل المسودة الضيف إلى حسابك."));
@@ -553,12 +556,17 @@ function CreateCvPageContent() {
       setDraftMessage(null);
 
       try {
-        await saveUserDraft(user.uid, draftData as CvDraftData);
+        // Save with cvId if editing existing CV, otherwise create new
+        const savedCvId = await saveUserDraft(user.uid, draftData as CvDraftData, cvId || null);
         setDraftExists(true);
         setDraftLastUpdated(new Date());
         hasUnsavedChanges.current = false;
         setDraftStatus("success");
         setDraftMessage(t("Draft saved successfully!", "تم حفظ المسودة بنجاح!"));
+        // Update URL if new CV was created (cvId was null but now we have an ID)
+        if (!cvId && savedCvId) {
+          router.replace(`/create-cv?id=${savedCvId}`, { scroll: false });
+        }
         setTimeout(() => {
           setDraftStatus("idle");
           setDraftMessage(null);
@@ -1166,10 +1174,28 @@ function CreateCvPageContent() {
                 )}
               </Button>
               {/* AI Enhance: calls API route - Only available when there's CV content to enhance
+                  Disabled for free plan users - premium feature requires paid subscription
                   TODO: refine prompt and handle edge cases */}
-              <Button variant="secondary" disabled={aiLoading || draftSaving} onClick={enhanceWithAI}>
-                {aiLoading ? t("Enhancing...", "...تحسين") : t("Enhance with AI", "تحسين بالذكاء")}
-              </Button>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span>
+                      <Button 
+                        variant="secondary" 
+                        disabled={aiLoading || draftSaving || (user && userPlan?.planType === "free") || false} 
+                        onClick={enhanceWithAI}
+                      >
+                        {aiLoading ? t("Enhancing...", "...تحسين") : t("Enhance with AI", "تحسين بالذكاء")}
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  {user && userPlan?.planType === "free" && (
+                    <TooltipContent>
+                      <p>{t("AI enhancement is available for paid plans only. Upgrade to unlock this feature.", "تحسين الذكاء الاصطناعي متاح للخطط المدفوعة فقط. قم بالترقية لإلغاء قفل هذه الميزة.")}</p>
+                    </TooltipContent>
+                  )}
+                </Tooltip>
+              </TooltipProvider>
               {/* PDF Download removed from builder - only available after payment in checkout */}
               {/* Save Draft button - Only relevant when user has entered data beyond template selection */}
               <Button
