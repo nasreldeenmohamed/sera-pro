@@ -131,6 +131,24 @@ export function ClassicTemplate({ data, isAr, showWatermark = false, templateKey
             </View>
           )}
 
+          {/* Projects */}
+          {Array.isArray(data.projects) && data.projects.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>{isAr ? "المشاريع" : "Projects"}</Text>
+              {data.projects.map((p: any, i: number) => (
+                <View key={i} style={styles.row}>
+                  <Text style={styles.experienceRole}>{p.title || (isAr ? "عنوان المشروع" : "Project Title")}</Text>
+                  <Text style={styles.experienceDate}>
+                    {p.startDate || ""}{p.endDate ? (isAr ? ` إلى ${p.endDate}` : ` - ${p.endDate}`) : (isAr ? " - حتى الآن" : " - Present")}
+                  </Text>
+                  {p.description && (
+                    <Text style={styles.experienceDesc}>{p.description}</Text>
+                  )}
+                </View>
+              ))}
+            </View>
+          )}
+
           {/* Education */}
           {Array.isArray(data.education) && data.education.length > 0 && (
             <View style={styles.section}>

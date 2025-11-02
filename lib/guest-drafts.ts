@@ -35,6 +35,12 @@ export type GuestDraftData = {
     endDate?: string;
     description?: string;
   }>;
+  projects?: Array<{
+    title: string;
+    startDate: string;
+    endDate?: string;
+    description?: string;
+  }>;
   education: Array<{
     school: string;
     degree: string;

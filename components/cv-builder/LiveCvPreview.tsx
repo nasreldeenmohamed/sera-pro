@@ -94,6 +94,31 @@ const ClassicTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) =
         </section>
       )}
 
+      {data.projects && data.projects.length > 0 && (
+        <section className="mb-6">
+          <h2 className="text-xl font-semibold mb-3 pb-1" style={{ color: colors.primary, borderBottom: `2px solid ${colors.primary}` }}>
+            {t("Projects", "المشاريع")}
+          </h2>
+          <div className="space-y-4">
+            {data.projects.map((project, idx) => (
+              <div key={idx} className="mb-4">
+                <div className={cn("flex justify-between items-start mb-1", isAr ? "flex-row-reverse" : "")}>
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-lg text-zinc-900">{project.title || t("Project Title", "عنوان المشروع")}</h3>
+                  </div>
+                  <div className={cn("text-sm text-zinc-600 whitespace-nowrap", isAr ? "ml-3" : "mr-3")}>
+                    {project.startDate || ""} {project.endDate ? ` ${isAr ? "إلى" : "-"} ${project.endDate}` : ` ${isAr ? "-" : "-"} ${t("Present", "حتى الآن")}`}
+                  </div>
+                </div>
+                {project.description && (
+                  <p className="text-zinc-600 text-sm whitespace-pre-line mt-2 leading-relaxed">{project.description}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       {data.education && data.education.length > 0 && (
         <section className="mb-6">
           <h2 className="text-xl font-semibold mb-3 pb-1" style={{ color: colors.primary, borderBottom: `2px solid ${colors.primary}` }}>

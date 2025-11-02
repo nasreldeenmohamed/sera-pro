@@ -33,7 +33,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { CV_TIPS, FIELD_HELP, hasMinimumDataForAI, formatValidationMessage, countFormErrors } from "@/lib/cv-helpers";
-import { getPersonalLabels, getExperienceLabels, getEducationLabels, getSkillsLabels, getLanguagesLabels, getCertificationsLabels, getSectionHeaders } from "@/lib/cv-language-labels";
+import { getPersonalLabels, getExperienceLabels, getEducationLabels, getSkillsLabels, getLanguagesLabels, getCertificationsLabels, getProjectsLabels, getSectionHeaders } from "@/lib/cv-language-labels";
 import { AuthRequiredModal } from "@/components/auth/AuthRequiredModal";
 import {
   saveGuestDraft,
@@ -100,6 +100,21 @@ const educationSchema = z.object({
     .refine((val) => !val || validateDate(val), { message: "Invalid date format. Use YYYY-MM / تنسيق تاريخ غير صحيح. استخدم YYYY-MM" }),
 });
 
+const projectSchema = z.object({
+  title: z.string()
+    .min(2, { message: "Project title must be at least 2 characters / يجب أن يكون عنوان المشروع على الأقل حرفين" })
+    .max(100, { message: "Project title too long / عنوان المشروع طويل جداً" }),
+  startDate: z.string()
+    .min(1, { message: "Start date is required / تاريخ البداية مطلوب" })
+    .refine(validateDate, { message: "Invalid date format. Use YYYY-MM / تنسيق تاريخ غير صحيح. استخدم YYYY-MM" }),
+  endDate: z.string()
+    .optional()
+    .refine((val) => !val || validateDate(val), { message: "Invalid date format. Use YYYY-MM / تنسيق تاريخ غير صحيح. استخدم YYYY-MM" }),
+  description: z.string()
+    .max(1000, { message: "Description too long (max 1000 characters) / الوصف طويل جداً (حد أقصى 1000 حرف)" })
+    .optional(),
+});
+
 const schema = z.object({
   fullName: z.string()
     .min(2, { message: "Full name is required (min 2 characters) / الاسم الكامل مطلوب (حد أدنى حرفين)" })
@@ -128,6 +143,7 @@ const schema = z.object({
       .or(z.literal("")),
   }),
   experience: z.array(experienceSchema).default([]),
+  projects: z.array(projectSchema).default([]),
   education: z.array(educationSchema).default([]),
   skills: z.array(z.string()
     .min(1, { message: "Skill cannot be empty / لا يمكن أن تكون المهارة فارغة" })
@@ -186,6 +202,7 @@ function CreateCvPageContent() {
       summary: "",
       contact: { email: "", phone: "", location: "", website: "" },
       experience: [],
+      projects: [],
       education: [],
       skills: [],
       languages: [],
@@ -199,6 +216,7 @@ function CreateCvPageContent() {
   const eduArray = useFieldArray({ control: form.control, name: "education" });
   // Note: useFieldArray works with string arrays at runtime, but TypeScript types it only for object arrays
   // Using type assertions to bypass this limitation
+  const projectsArray = useFieldArray({ control: form.control, name: "projects" });
   const skillsArray = useFieldArray({ control: form.control, name: "skills" as any });
   const langsArray = useFieldArray({ control: form.control, name: "languages" as any });
   const certsArray = useFieldArray({ control: form.control, name: "certifications" as any });
@@ -238,6 +256,21 @@ function CreateCvPageContent() {
   // Key: experience index, Value: boolean (is present)
   const [presentStates, setPresentStates] = useState<Record<number, boolean>>({});
   
+  // Track whether Projects section is included
+  const projects = form.watch("projects") || [];
+  const [includeProjects, setIncludeProjects] = useState(() => {
+    // Initialize based on current projects when component mounts
+    return projects.length > 0;
+  });
+  
+  // Sync includeProjects state when projects array changes (but not create infinite loop)
+  useEffect(() => {
+    const hasProjects = projects.length > 0;
+    if (hasProjects !== includeProjects) {
+      setIncludeProjects(hasProjects);
+    }
+  }, [projects.length]); // Only depend on length, not the state itself
+  
   // Define steps for the wizard
   // Note: Step labels use site locale (isAr), but form content uses CV language (isCvAr)
   const steps = useMemo(() => [
@@ -246,6 +279,7 @@ function CreateCvPageContent() {
     { key: "import", label: { en: "Import", ar: "الاستيراد" } },
     { key: "personal", label: { en: "Personal", ar: "بيانات" } },
     { key: "experience", label: { en: "Experience", ar: "خبرات" } },
+    { key: "projects", label: { en: "Projects", ar: "مشاريع" } },
     { key: "education", label: { en: "Education", ar: "تعليم" } },
     { key: "skills", label: { en: "Skills", ar: "مهارات" } },
     { key: "languages", label: { en: "Languages", ar: "لغات" } },
@@ -297,6 +331,7 @@ function CreateCvPageContent() {
     summary: formValues.summary || "",
     contact: formValues.contact || { email: "", phone: "", location: "", website: "" },
     experience: formValues.experience || [],
+    projects: formValues.projects || [],
     education: formValues.education || [],
     skills: formValues.skills || [],
     languages: formValues.languages || [],
@@ -372,6 +407,7 @@ function CreateCvPageContent() {
               summary: data.summary || "",
               contact: data.contact || { email: "", phone: "", location: "", website: "" },
               experience: data.experience || [],
+              projects: data.projects || [],
               education: data.education || [],
               skills: data.skills || [],
               languages: data.languages || [],
@@ -541,6 +577,7 @@ function CreateCvPageContent() {
       summary: values.summary,
       contact: values.contact || { email: "", phone: "", location: "", website: "" },
       experience: values.experience || [],
+      projects: values.projects || [],
       education: values.education || [],
       skills: values.skills || [],
       languages: values.languages || [],
@@ -640,6 +677,7 @@ function CreateCvPageContent() {
             summary: draft.summary || "",
             contact: draft.contact || { email: "", phone: "", location: "", website: "" },
             experience: draft.experience || [],
+            projects: draft.projects || [],
             education: draft.education || [],
             skills: draft.skills || [],
             languages: draft.languages || [],
@@ -781,6 +819,7 @@ function CreateCvPageContent() {
       ...importedData,
       // Merge arrays instead of replacing
       experience: [...(existingData.experience || []), ...(importedData.experience || [])],
+      projects: [...(existingData.projects || []), ...(importedData.projects || [])],
       education: [...(existingData.education || []), ...(importedData.education || [])],
       skills: [...(new Set([...(existingData.skills || []), ...(importedData.skills || [])]))],
       languages: [...(new Set([...(existingData.languages || []), ...(importedData.languages || [])]))],
@@ -1665,7 +1704,180 @@ function CreateCvPageContent() {
                   );
                   })()}
 
-                  {/* Education Section (Step 6) */}
+                  {/* Projects Section (Step 6) */}
+                  {currentStep === 6 && (() => {
+                    // Get CV language-specific labels for Projects section
+                    const projLabels = getProjectsLabels(cvLanguage);
+                    const sectionHeaders = getSectionHeaders(cvLanguage);
+                    
+                    return (
+                      <div className="space-y-4" dir={isCvAr ? "rtl" : "ltr"}>
+                        {/* Section Header with Toggle */}
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="text-xl font-semibold">{sectionHeaders.projects}</h3>
+                          <div className="flex items-center gap-2">
+                            <Checkbox
+                              id="include-projects"
+                              checked={includeProjects}
+                              onCheckedChange={(checked) => {
+                                const newState = checked === true;
+                                setIncludeProjects(newState);
+                                // If disabling, clear all projects
+                                if (!newState && projects.length > 0) {
+                                  projectsArray.remove();
+                                  // Remove all projects
+                                  while (projectsArray.fields.length > 0) {
+                                    projectsArray.remove(0);
+                                  }
+                                } else if (newState && projects.length === 0) {
+                                  // If enabling and no projects exist, add one empty project with all fields defaulted
+                                  projectsArray.append({ title: "", startDate: "", endDate: "", description: "" });
+                                }
+                              }}
+                            />
+                            <label
+                              htmlFor="include-projects"
+                              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                            >
+                              {t("Include Projects Section", "تضمين قسم المشاريع")}
+                            </label>
+                          </div>
+                        </div>
+                        
+                        {/* Optional section note */}
+                        <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-4">
+                          {t("Projects are optional. Toggle above to include or skip this section.", "المشاريع اختيارية. استخدم المفتاح أعلاه لتضمين أو تخطي هذا القسم.")}
+                        </p>
+                        
+                        {/* Projects form fields - only show if includeProjects is true */}
+                        {includeProjects && (
+                          <>
+                            {projectsArray.fields.map((f, idx) => (
+                              <div key={f.id} className="grid grid-cols-1 gap-3 rounded-md border p-3 sm:grid-cols-2">
+                                <FormField name={`projects.${idx}.title`} control={form.control} render={({ field }) => (
+                                  <FormItem className="sm:col-span-2">
+                                    <FormLabel className="flex items-center gap-2">
+                                      {projLabels.title.label} <span className="text-red-500">*</span>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <HelpCircle className="h-4 w-4 text-zinc-400 cursor-help" />
+                                        </TooltipTrigger>
+                                        <TooltipContent className="max-w-xs" dir={isCvAr ? "rtl" : "ltr"}>
+                                          <p>{isCvAr ? projLabels.title.tooltip.ar : projLabels.title.tooltip.en}</p>
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </FormLabel>
+                                    <FormControl>
+                                      <Input 
+                                        placeholder={projLabels.title.placeholder} 
+                                        {...field} 
+                                        value={field.value || ""}
+                                        dir={isCvAr ? "rtl" : "ltr"} 
+                                      />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )} />
+                                <FormField name={`projects.${idx}.startDate`} control={form.control} render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel className="flex items-center gap-2">
+                                      {projLabels.startDate.label} <span className="text-red-500">*</span>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <HelpCircle className="h-4 w-4 text-zinc-400 cursor-help" />
+                                        </TooltipTrigger>
+                                        <TooltipContent className="max-w-xs" dir={isCvAr ? "rtl" : "ltr"}>
+                                          <p>{isCvAr ? CV_TIPS.date.ar : CV_TIPS.date.en}</p>
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </FormLabel>
+                                    <FormControl>
+                                      <Input 
+                                        placeholder={projLabels.startDate.placeholder} 
+                                        {...field} 
+                                        value={field.value || ""}
+                                        dir={isCvAr ? "rtl" : "ltr"} 
+                                      />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )} />
+                                <FormField name={`projects.${idx}.endDate`} control={form.control} render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel className="flex items-center gap-2">
+                                      {projLabels.endDate.label}
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <HelpCircle className="h-4 w-4 text-zinc-400 cursor-help" />
+                                        </TooltipTrigger>
+                                        <TooltipContent className="max-w-xs" dir={isCvAr ? "rtl" : "ltr"}>
+                                          <p>{isCvAr ? "اتركه فارغاً للمشروع الحالي" : "Leave empty for ongoing project"}</p>
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </FormLabel>
+                                    <FormControl>
+                                      <Input 
+                                        placeholder={projLabels.endDate.placeholder} 
+                                        {...field} 
+                                        value={field.value || ""}
+                                        dir={isCvAr ? "rtl" : "ltr"} 
+                                      />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )} />
+                                <FormField name={`projects.${idx}.description`} control={form.control} render={({ field }) => {
+                                  const charCount = (field.value || "").length;
+                                  const maxChars = 1000;
+                                  return (
+                                    <FormItem className="sm:col-span-2">
+                                      <FormLabel className="flex items-center gap-2">
+                                        {projLabels.description.label}
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <HelpCircle className="h-4 w-4 text-zinc-400 cursor-help" />
+                                          </TooltipTrigger>
+                                          <TooltipContent className="max-w-xs" dir={isCvAr ? "rtl" : "ltr"}>
+                                            <p>{isCvAr ? projLabels.description.tooltip.ar : projLabels.description.tooltip.en}</p>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      </FormLabel>
+                                      <FormControl>
+                                        <textarea 
+                                          rows={3} 
+                                          className="w-full rounded-md border px-3 py-2 text-sm outline-none" 
+                                          placeholder={projLabels.description.placeholder}
+                                          {...field} 
+                                          value={field.value || ""}
+                                          dir={isCvAr ? "rtl" : "ltr"}
+                                        />
+                                      </FormControl>
+                                      <div className="flex items-center justify-between">
+                                        <FormMessage />
+                                        <p className={`text-xs ${charCount > maxChars ? "text-red-500" : "text-zinc-500 dark:text-zinc-400"}`}>
+                                          {charCount}/{maxChars}
+                                        </p>
+                                      </div>
+                                    </FormItem>
+                                  );
+                                }} />
+                                <div className="sm:col-span-2 flex justify-end">
+                                  <Button variant="secondary" type="button" onClick={() => projectsArray.remove(idx)}>
+                                    {t("Remove", "حذف")}
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
+                            <Button type="button" onClick={() => projectsArray.append({ title: "", startDate: "", endDate: "", description: "" })}>
+                              {projLabels.addButton}
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })()}
+
+                  {/* Education Section (Step 7) */}
                   {/* 
                     NOTE: Education, Skills, Languages, and Certifications sections follow the same pattern:
                     - Wrap in IIFE: {currentStep === X && (() => { ... return (...) })()}
@@ -1676,7 +1888,7 @@ function CreateCvPageContent() {
                     - Use headers.xxx for section headers
                     - Use isCvAr instead of isAr for tooltips and help text
                   */}
-                  {currentStep === 6 && (() => {
+                  {currentStep === 7 && (() => {
                     const eduLabels = getEducationLabels(cvLanguage);
                     const sectionHeaders = getSectionHeaders(cvLanguage);
                     return (
@@ -1740,8 +1952,8 @@ function CreateCvPageContent() {
                     );
                   })()}
 
-                  {/* Skills Section (Step 7) */}
-                  {currentStep === 7 && (() => {
+                  {/* Skills Section (Step 8) */}
+                  {currentStep === 8 && (() => {
                     const skillsLabels = getSkillsLabels(cvLanguage);
                     const sectionHeaders = getSectionHeaders(cvLanguage);
                     return (
@@ -1807,7 +2019,7 @@ function CreateCvPageContent() {
                   })()}
 
                   {/* Certifications Section (Step 9) */}
-                  {currentStep === 9 && (() => {
+                  {currentStep === 10 && (() => {
                     const certLabels = getCertificationsLabels(cvLanguage);
                     const sectionHeaders = getSectionHeaders(cvLanguage);
                     return (

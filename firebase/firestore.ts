@@ -228,30 +228,36 @@ export type UserCv = {
   cvLanguage?: "ar" | "en";
   createdAt?: any;
   updatedAt?: any;
-  // Include all CvDraftData fields for compatibility
-  contact?: {
-    email?: string;
-    phone?: string;
-    location?: string;
-    website?: string;
-  };
-  experience?: Array<{
-    company: string;
-    role: string;
-    startDate: string;
-    endDate?: string;
-    description?: string;
-  }>;
-  education?: Array<{
-    school: string;
-    degree: string;
-    startDate: string;
-    endDate?: string;
-  }>;
-  skills?: string[];
-  languages?: string[];
-  certifications?: string[];
-};
+       // Include all CvDraftData fields for compatibility
+       contact?: {
+         email?: string;
+         phone?: string;
+         location?: string;
+         website?: string;
+       };
+       experience?: Array<{
+         company: string;
+         role: string;
+         startDate: string;
+         endDate?: string;
+         description?: string;
+       }>;
+       projects?: Array<{
+         title: string;
+         startDate: string;
+         endDate?: string;
+         description?: string;
+       }>;
+       education?: Array<{
+         school: string;
+         degree: string;
+         startDate: string;
+         endDate?: string;
+       }>;
+       skills?: string[];
+       languages?: string[];
+       certifications?: string[];
+     };
 
 /**
  * List all CVs for a user from /drafts/{userId}/ sub-collection
@@ -412,7 +418,7 @@ export async function setUserPlanFromProduct(userId: string, product: "one_time"
     subscriptionUpdate = {
       plan: "one_time",
       status: "active",
-      creditsRemaining: undefined,
+      // Omit creditsRemaining - only flex_pack uses credits
       validUntil: expirationDate,
       lastPaymentDate: now,
       startDate: existingSubscription?.startDate || now,
@@ -428,7 +434,7 @@ export async function setUserPlanFromProduct(userId: string, product: "one_time"
     subscriptionUpdate = {
       plan: "annual_pass",
       status: "active",
-      creditsRemaining: undefined,
+      // Omit creditsRemaining - only flex_pack uses credits
       lastPaymentDate: now,
       renewalDate: renewalDate,
       nextBillingDate: nextBillingDate,
@@ -440,6 +446,7 @@ export async function setUserPlanFromProduct(userId: string, product: "one_time"
   }
   
   // Merge subscription update with existing subscription
+  // Remove any undefined values before updating Firestore
   const updatedSubscription: UserSubscription = {
     ...(existingSubscription || {
       plan: "free",
@@ -449,9 +456,18 @@ export async function setUserPlanFromProduct(userId: string, product: "one_time"
     ...subscriptionUpdate,
   };
   
-  // Update profile with new subscription
+  // Clean up undefined values from subscription object (Firestore doesn't accept undefined)
+  const cleanedSubscription: any = {};
+  Object.keys(updatedSubscription).forEach((key) => {
+    const value = (updatedSubscription as any)[key];
+    if (value !== undefined) {
+      cleanedSubscription[key] = value;
+    }
+  });
+  
+  // Update profile with new subscription (use cleaned subscription without undefined values)
   await updateDoc(profileRef, {
-    subscription: updatedSubscription,
+    subscription: cleanedSubscription as UserSubscription,
     updatedAt: serverTimestamp(),
   }).catch(async () => {
     // If profile doesn't exist, create it (shouldn't happen but handle gracefully)
@@ -461,7 +477,7 @@ export async function setUserPlanFromProduct(userId: string, product: "one_time"
     // Retry with setDoc if updateDoc fails
     await setDoc(profileRef, {
       ...existingData,
-      subscription: updatedSubscription,
+      subscription: cleanedSubscription as UserSubscription,
       updatedAt: serverTimestamp(),
     }, { merge: true });
   });
@@ -492,6 +508,12 @@ export type CvDraftData = {
     endDate?: string;
     description?: string;
   }>;
+  projects?: Array<{
+    title: string;
+    startDate: string;
+    endDate?: string;
+    description?: string;
+  }>;
   education: Array<{
     school: string;
     degree: string;
@@ -508,6 +530,56 @@ export type CvDraftData = {
 };
 
 /**
+ * Clean undefined values and empty strings from optional fields recursively
+ * Firestore doesn't accept undefined values - they must be omitted
+ * For optional fields (endDate, description), empty strings are treated as undefined and omitted
+ * 
+ * @param obj - Data object to clean
+ * @returns Cleaned object with undefined values and empty optional strings removed
+ */
+function cleanUndefinedValues(obj: any): any {
+  if (obj === null) {
+    return null;
+  }
+  
+  if (obj === undefined) {
+    return undefined; // Will be skipped in object processing
+  }
+  
+  if (Array.isArray(obj)) {
+    return obj.map(item => cleanUndefinedValues(item));
+  }
+  
+  if (typeof obj === 'object') {
+    const cleaned: any = {};
+    for (const key in obj) {
+      if (obj.hasOwnProperty(key)) {
+        const value = obj[key];
+        // Skip undefined values entirely
+        if (value === undefined) {
+          continue;
+        }
+        
+        // For optional fields in projects/experience/education, skip empty strings
+        const optionalFields = ['endDate', 'description'];
+        if (optionalFields.includes(key) && value === '') {
+          continue; // Omit empty optional fields
+        }
+        
+        const cleanedValue = cleanUndefinedValues(value);
+        // Only add if cleaned value is not undefined
+        if (cleanedValue !== undefined) {
+          cleaned[key] = cleanedValue;
+        }
+      }
+    }
+    return cleaned;
+  }
+  
+  return obj;
+}
+
+/**
  * Save or update a CV draft in /drafts/{userId}/cvs/{cvId}
  * 
  * If cvId is provided, updates existing CV. Otherwise, creates new CV with auto-generated ID.
@@ -520,11 +592,14 @@ export type CvDraftData = {
 export async function saveUserDraft(userId: string, draftData: CvDraftData, cvId?: string | null): Promise<string> {
   const db = getFirestore(getFirebaseApp());
   
+  // Clean undefined values before saving (Firestore doesn't accept undefined)
+  const cleanedData = cleanUndefinedValues(draftData);
+  
   if (cvId) {
     // Update existing CV in sub-collection: /drafts/{userId}/cvs/{cvId}
     const ref = doc(db, "drafts", userId, "cvs", cvId);
     await updateDoc(ref, {
-      ...draftData,
+      ...cleanedData,
       updatedAt: serverTimestamp(),
     });
     return cvId;
@@ -532,7 +607,7 @@ export async function saveUserDraft(userId: string, draftData: CvDraftData, cvId
     // Create new CV in sub-collection: /drafts/{userId}/cvs/{autoId}
     const ref = collection(db, "drafts", userId, "cvs");
     const newDoc = await addDoc(ref, {
-      ...draftData,
+      ...cleanedData,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
@@ -559,6 +634,7 @@ export async function getUserDraft(userId: string): Promise<CvDraftData | null> 
     summary: firstCv.summary || "",
     contact: firstCv.contact || { email: "", phone: "", location: "", website: "" },
     experience: firstCv.experience || [],
+    projects: firstCv.projects || [],
     education: firstCv.education || [],
     skills: firstCv.skills || [],
     languages: firstCv.languages || [],
@@ -588,6 +664,7 @@ export async function getUserDraftById(userId: string, cvId: string): Promise<Cv
     summary: cv.summary || "",
     contact: cv.contact || { email: "", phone: "", location: "", website: "" },
     experience: cv.experience || [],
+    projects: cv.projects || [],
     education: cv.education || [],
     skills: cv.skills || [],
     languages: cv.languages || [],

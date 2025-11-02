@@ -15,3 +15,7 @@ KASHIER_MODE=test
 
 # Anthropic (Claude)
 ANTHROPIC_API_KEY=
+
+# QA/Testing Mode (Development Only - ⚠️ DO NOT ENABLE IN PRODUCTION)
+# Set to "true" to bypass payment gateway and directly activate plans for testing
+# NEXT_PUBLIC_ENABLE_QA_PAYMENT_BYPASS=true

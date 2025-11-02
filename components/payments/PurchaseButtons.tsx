@@ -3,12 +3,26 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth-context";
 import { useLocale } from "@/lib/locale-context";
+import { setUserPlanFromProduct } from "@/firebase/firestore";
+import { useRouter } from "next/navigation";
 
 type Product = "one_time" | "flex_pack" | "annual_pass";
+
+/**
+ * QA/Testing Mode: Bypass Payment
+ * 
+ * Set ENABLE_QA_PAYMENT_BYPASS=true in .env.local to enable payment bypass for QA/testing.
+ * When enabled, clicking "Subscribe" will directly update the subscription in Firestore
+ * without going through payment gateway.
+ * 
+ * ⚠️ IMPORTANT: Remove or disable this before production deployment!
+ */
+const ENABLE_QA_PAYMENT_BYPASS = process.env.NEXT_PUBLIC_ENABLE_QA_PAYMENT_BYPASS === "true";
 
 export function PurchaseButton({ product }: { product: Product }) {
   const { user } = useAuth();
   const { t } = useLocale();
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -22,6 +36,32 @@ export function PurchaseButton({ product }: { product: Product }) {
         return;
       }
 
+      // QA/TESTING MODE: Bypass payment and directly activate plan
+      if (ENABLE_QA_PAYMENT_BYPASS) {
+        console.warn("[QA MODE] Payment bypass enabled - directly activating plan:", product);
+        try {
+          // Directly update subscription in Firestore (bypasses payment)
+          await setUserPlanFromProduct(user.uid, product);
+          console.log("[QA MODE] Plan activated successfully:", product);
+          
+          // Refresh the page to show updated plan features
+          router.refresh();
+          
+          // Show success message (you could use a toast here)
+          alert(t(
+            `QA Mode: ${product} plan activated successfully!`,
+            `وضع QA: تم تفعيل خطة ${product} بنجاح!`
+          ));
+        } catch (qaError: any) {
+          console.error("[QA MODE] Failed to activate plan:", qaError);
+          setError(t("Failed to activate plan.", "فشل تفعيل الخطة."));
+        } finally {
+          setLoading(false);
+        }
+        return;
+      }
+
+      // PRODUCTION MODE: Normal payment flow through Kashier
       // Request Kashier checkout URL with product and userId
       const planName = product === "one_time" ? "one_time" : product === "flex_pack" ? "flex_pack" : "annual_pass";
       const checkoutUrl = `/api/payments/kashier/checkout?product=${encodeURIComponent(planName)}&userId=${encodeURIComponent(user.uid)}`;

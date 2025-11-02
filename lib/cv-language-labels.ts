@@ -162,6 +162,41 @@ export const getCertificationsLabels = (cvLanguage: CvLanguage) => {
 };
 
 /**
+ * Projects Section Labels
+ */
+export const getProjectsLabels = (cvLanguage: CvLanguage) => {
+  const isAr = cvLanguage === "ar";
+  return {
+    title: {
+      label: isAr ? "عنوان المشروع" : "Project Title",
+      placeholder: isAr ? "مثال: نظام إدارة المخزون" : "e.g., Inventory Management System",
+      tooltip: {
+        en: "Enter a clear, descriptive title for your project",
+        ar: "أدخل عنوانًا واضحًا ووصفيًا لمشروعك",
+      },
+    },
+    startDate: {
+      label: isAr ? "تاريخ البداية" : "Start Date",
+      placeholder: isAr ? "YYYY-MM" : "YYYY-MM",
+    },
+    endDate: {
+      label: isAr ? "تاريخ النهاية" : "End Date",
+      placeholder: isAr ? "YYYY-MM أو اتركه فارغًا للمشروع الجاري" : "YYYY-MM or leave empty for ongoing project",
+    },
+    description: {
+      label: isAr ? "الوصف" : "Description",
+      placeholder: isAr ? "اكتب وصفًا موجزًا للمشروع وإنجازاته" : "Write a brief description of the project and its achievements",
+      tooltip: {
+        en: "Describe your role, technologies used, and key outcomes of the project",
+        ar: "اوصف دورك والتقنيات المستخدمة والنتائج الرئيسية للمشروع",
+      },
+    },
+    addButton: isAr ? "إضافة مشروع" : "Add Project",
+    removeButton: isAr ? "إزالة" : "Remove",
+  };
+};
+
+/**
  * Section Headers
  */
 export const getSectionHeaders = (cvLanguage: CvLanguage) => {
@@ -169,6 +204,7 @@ export const getSectionHeaders = (cvLanguage: CvLanguage) => {
   return {
     personal: isAr ? "المعلومات الشخصية" : "Personal Information",
     experience: isAr ? "الخبرة المهنية" : "Work Experience",
+    projects: isAr ? "المشاريع" : "Projects",
     education: isAr ? "التعليم" : "Education",
     skills: isAr ? "المهارات" : "Skills",
     languages: isAr ? "اللغات" : "Languages",

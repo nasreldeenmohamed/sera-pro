@@ -3,13 +3,66 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { SiteLayout } from "@/components/layout/SiteLayout";
 import { useLocale } from "@/lib/locale-context";
+import { useAuth } from "@/lib/auth-context";
+import { useRouter } from "next/navigation";
+import { setUserPlanFromProduct } from "@/firebase/firestore";
 import { Check } from "lucide-react";
+
+/**
+ * QA/Testing Mode: Bypass Payment
+ * 
+ * Set NEXT_PUBLIC_ENABLE_QA_PAYMENT_BYPASS=true in .env.local to enable payment bypass for QA/testing.
+ * When enabled, clicking "Subscribe" will directly update the subscription in Firestore
+ * without going through payment gateway.
+ * 
+ * ⚠️ IMPORTANT: Remove or disable this before production deployment!
+ */
+const ENABLE_QA_PAYMENT_BYPASS = process.env.NEXT_PUBLIC_ENABLE_QA_PAYMENT_BYPASS === "true";
 
 // Pricing page matching the landing page pricing section
 // Shows all 4 plans: Free, One-Time Purchase, Flex Pack, Annual Pass
 // Uses shared SiteLayout for consistent header/footer
 export default function PricingPage() {
   const { isAr, t } = useLocale();
+  const { user } = useAuth();
+  const router = useRouter();
+  
+  /**
+   * Handle purchase/subscribe click
+   * In QA mode: Bypass payment and directly activate plan
+   * In production: Redirect to payment checkout
+   */
+  const handlePurchase = async (product: "one_time" | "flex_pack" | "annual_pass") => {
+    if (!user) {
+      router.push("/auth?redirect=/pricing");
+      return;
+    }
+
+    // QA/TESTING MODE: Bypass payment and directly activate plan
+    if (ENABLE_QA_PAYMENT_BYPASS) {
+      try {
+        console.warn("[QA MODE] Payment bypass enabled - directly activating plan:", product);
+        await setUserPlanFromProduct(user.uid, product);
+        console.log("[QA MODE] Plan activated successfully:", product);
+        
+        // Refresh to show updated plan
+        router.refresh();
+        
+        // Show success message
+        alert(t(
+          `QA Mode: ${product} plan activated successfully!`,
+          `وضع QA: تم تفعيل خطة ${product} بنجاح!`
+        ));
+      } catch (error: any) {
+        console.error("[QA MODE] Failed to activate plan:", error);
+        alert(t("Failed to activate plan. Please try again.", "فشل تفعيل الخطة. يرجى المحاولة مرة أخرى."));
+      }
+      return;
+    }
+
+    // PRODUCTION MODE: Redirect to payment checkout
+    router.push(`/api/payments/kashier/checkout?product=${product}&userId=${user.uid}`);
+  };
 
   return (
     <SiteLayout>
@@ -98,13 +151,11 @@ export default function PricingPage() {
               </ul>
               {/* TODO(payment): At checkout, select 49 or 79 tier based on template group */}
               <Button
-                asChild
+                onClick={() => handlePurchase("one_time")}
                 className="mt-6 w-full text-white"
                 style={{ backgroundColor: "#0d47a1" }}
               >
-                <Link href="/api/payments/kashier/checkout?product=one_time">
-                  {t("Buy CV", "شراء سيرة")}
-                </Link>
+                {t("Buy CV", "شراء سيرة")}
               </Button>
             </div>
 
@@ -129,13 +180,11 @@ export default function PricingPage() {
               </ul>
               {/* TODO(wallet): Deduct 1 credit per exported CV, show balance in dashboard */}
               <Button
-                asChild
+                onClick={() => handlePurchase("flex_pack")}
                 className="mt-6 w-full text-white"
                 style={{ backgroundColor: "#0d47a1" }}
               >
-                <Link href="/api/payments/kashier/checkout?product=flex_pack">
-                  {t("Get Flex Pack", "شراء الباقة المرنة")}
-                </Link>
+                {t("Get Flex Pack", "شراء الباقة المرنة")}
               </Button>
             </div>
 
@@ -170,13 +219,11 @@ export default function PricingPage() {
               </ul>
               {/* TODO(access): Grant pro scope; renew yearly; show renewal date */}
               <Button
-                asChild
+                onClick={() => handlePurchase("annual_pass")}
                 className="mt-6 w-full text-white"
                 style={{ backgroundColor: "#0d47a1" }}
               >
-                <Link href="/api/payments/kashier/checkout?product=annual_pass">
-                  {t("Get Annual Pass", "الحصول على البطاقة السنوية")}
-                </Link>
+                {t("Get Annual Pass", "الحصول على البطاقة السنوية")}
               </Button>
             </div>
           </div>
