@@ -2,20 +2,26 @@
  * CV Template Configuration
  * 
  * Defines all available CV templates with their metadata, access levels, and preview styling.
- * Templates are categorized as "basic" (free) or "premium" (requires paid plan).
+ * 
+ * Template Access Groups:
+ * - GROUP 1: First N templates (accessible to Free and One-Time plans)
+ *   - Currently: First 3 templates
+ *   - To change: Update TEMPLATE_GROUP_1_SIZE constant
+ * - GROUP 2: All remaining templates (accessible only to Flex Pack and Annual Pass plans)
+ *   - All templates after the first N templates require premium subscription
  * 
  * Access Rules:
- * - Free plan: Only basic templates
- * - One-Time purchase: Basic + Creative templates
- * - Flex Pack: Basic + Creative + Technical templates
- * - Annual Pass: All templates (basic + premium)
+ * - Free plan: Only Group 1 templates (first 3)
+ * - One-Time purchase: Only Group 1 templates (first 3)
+ * - Flex Pack: All templates (Group 1 + Group 2)
+ * - Annual Pass: All templates (Group 1 + Group 2)
  * 
  * Template Properties:
  * - key: Unique identifier used in form state
  * - name: Bilingual display name
  * - description: Bilingual description
- * - accessLevel: "basic" | "premium"
- * - requiredPlan: Minimum plan required (null = free)
+ * - accessLevel: "basic" | "premium" (kept for backward compatibility, not used for access control)
+ * - requiredPlan: Legacy field (kept for backward compatibility, not used for access control)
  * - category: Style category for organization
  * - popular: Whether to show "Popular" badge
  * 
@@ -25,8 +31,16 @@
  * - Add font family options
  * - Add section ordering customization
  * - Add template-specific field requirements
+ * - Easily adjust group sizes by changing TEMPLATE_GROUP_1_SIZE
  */
 import type { UserPlan } from "@/firebase/firestore";
+
+/**
+ * Number of templates in Group 1 (accessible to Free and One-Time plans)
+ * To change the grouping, simply update this constant.
+ * Remaining templates will automatically be in Group 2 (premium plans only).
+ */
+export const TEMPLATE_GROUP_1_SIZE = 3;
 
 export type TemplateAccessLevel = "basic" | "premium";
 export type TemplateCategory = "traditional" | "modern" | "creative" | "technical" | "minimal";
@@ -198,37 +212,51 @@ export function getTemplate(key: string): Template | undefined {
 /**
  * Check if user has access to a template based on their plan
  * 
+ * Access is determined by template position:
+ * - First TEMPLATE_GROUP_1_SIZE templates (Group 1): Accessible to Free and One-Time plans
+ * - All remaining templates (Group 2): Only accessible to Flex Pack and Annual Pass plans
+ * 
  * @param template - Template to check
  * @param userPlan - User's current plan (null = free)
  * @returns true if user can access the template
  */
 export function hasTemplateAccess(template: Template, userPlan: UserPlan | null): boolean {
-  // Basic templates are always accessible
-  if (template.accessLevel === "basic") {
-    return true;
-  }
-
-  // Premium templates require a paid plan
-  if (!userPlan || userPlan.planType === "free") {
+  // Find template index in TEMPLATES array
+  const templateIndex = TEMPLATES.findIndex((t) => t.key === template.key);
+  
+  // If template not found, deny access (safety check)
+  if (templateIndex === -1) {
     return false;
   }
 
-  // Check required plan level
-  if (!template.requiredPlan) {
-    return true; // Shouldn't happen for premium, but handle gracefully
+  // Group 1: First TEMPLATE_GROUP_1_SIZE templates
+  // Accessible to: Free and One-Time plans
+  if (templateIndex < TEMPLATE_GROUP_1_SIZE) {
+    return true; // Always accessible
   }
 
-  const planHierarchy: Record<string, number> = {
-    free: 0,
-    one_time: 1,
-    flex_pack: 2,
-    annual_pass: 3,
-  };
+  // Group 2: All remaining templates
+  // Accessible to: Flex Pack and Annual Pass plans only
+  if (!userPlan || userPlan.planType === "free" || userPlan.planType === "one_time") {
+    return false; // Group 2 requires premium plan
+  }
 
-  const userPlanLevel = planHierarchy[userPlan.planType] || 0;
-  const requiredPlanLevel = planHierarchy[template.requiredPlan] || 0;
+  // Flex Pack and Annual Pass have access to all templates
+  return userPlan.planType === "flex_pack" || userPlan.planType === "annual_pass";
+}
 
-  return userPlanLevel >= requiredPlanLevel;
+/**
+ * Get template group number (1 or 2) for a template
+ * Useful for UI organization and display
+ * 
+ * @param template - Template to check
+ * @returns 1 for Group 1, 2 for Group 2
+ */
+export function getTemplateGroup(template: Template): 1 | 2 {
+  const templateIndex = TEMPLATES.findIndex((t) => t.key === template.key);
+  if (templateIndex === -1) return 1; // Default to group 1 if not found
+  
+  return templateIndex < TEMPLATE_GROUP_1_SIZE ? 1 : 2;
 }
 
 /**
@@ -240,21 +268,23 @@ export function getAccessibleTemplates(userPlan: UserPlan | null): Template[] {
 
 /**
  * Get upgrade message for locked template
+ * 
+ * Templates in Group 2 require Flex Pack or Annual Pass.
+ * 
+ * @param template - Template that is locked
+ * @param isAr - Whether to return Arabic message
+ * @returns Bilingual upgrade message
  */
 export function getUpgradeMessage(template: Template, isAr: boolean): string {
-  if (!template.requiredPlan) {
+  const templateGroup = getTemplateGroup(template);
+  
+  // Group 1 templates are always accessible, so no upgrade message needed
+  if (templateGroup === 1) {
     return "";
   }
 
-  const planNames: Record<string, { en: string; ar: string }> = {
-    one_time: { en: "One-Time Purchase", ar: "شراء لمرة واحدة" },
-    flex_pack: { en: "Flex Pack", ar: "باقة مرنة" },
-    annual_pass: { en: "Annual Pass", ar: "البطاقة السنوية" },
-  };
-
-  const planName = planNames[template.requiredPlan]?.[isAr ? "ar" : "en"] || template.requiredPlan;
-
+  // Group 2 templates require Flex Pack or Annual Pass
   return isAr
-    ? `قم بالترقية إلى ${planName} لفتح هذا القالب`
-    : `Upgrade to ${planName} to unlock this template`;
+    ? "قم بالترقية إلى الباقة المرنة أو البطاقة السنوية لفتح هذا القالب"
+    : "Upgrade to Flex Pack or Annual Pass to unlock this template";
 }

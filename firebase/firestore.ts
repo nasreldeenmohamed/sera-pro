@@ -279,6 +279,21 @@ export async function listUserCvs(userId: string): Promise<UserCv[]> {
 }
 
 /**
+ * Get the first (most recent) CV ID for a user
+ * 
+ * Used for free/one_time plans where users can only have one CV.
+ * CVs are sorted by updatedAt descending, so this returns the most recently updated CV ID.
+ * 
+ * @param userId - User's Firebase Auth UID
+ * @returns First CV ID or null if no CVs exist
+ */
+export async function getFirstCvId(userId: string): Promise<string | null> {
+  const cvs = await listUserCvs(userId);
+  if (cvs.length === 0) return null;
+  return cvs[0].id;
+}
+
+/**
  * Delete a CV from /drafts/{userId}/{cvId}
  * 
  * @param userId - User's Firebase Auth UID
@@ -582,7 +597,18 @@ function cleanUndefinedValues(obj: any): any {
 /**
  * Save or update a CV draft in /drafts/{userId}/cvs/{cvId}
  * 
- * If cvId is provided, updates existing CV. Otherwise, creates new CV with auto-generated ID.
+ * PLAN-AWARE SAVING:
+ * This function is called with plan-aware logic from the create-cv page:
+ * - For free/one_time plans: cvId should be set to the first CV ID (if exists) to reuse the document
+ * - For flex_pack/annual_pass plans: cvId can be null (create new) or specific ID (update existing)
+ * 
+ * PLAN TRANSITIONS:
+ * When a user upgrades/downgrades their plan:
+ * - Downgrade to free/one_time: Subsequent saves will reuse the first CV document
+ * - Upgrade to flex_pack/annual_pass: Users can create new CV documents (up to plan limits)
+ * 
+ * Note: Plan checking is handled by the caller (create-cv page), not this function.
+ * This function simply saves/updates based on the provided cvId.
  * 
  * @param userId - User's Firebase Auth UID
  * @param draftData - Complete CV form data to save

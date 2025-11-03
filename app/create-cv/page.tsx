@@ -20,7 +20,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { saveUserDraft, getUserDraft, getUserPlan, getUserDraftById, type CvDraftData, type UserPlan } from "@/firebase/firestore";
+import { saveUserDraft, getUserDraft, getUserPlan, getUserDraftById, getFirstCvId, type CvDraftData, type UserPlan } from "@/firebase/firestore";
 // PDF download functionality removed from builder - only available after payment
 // import { ClassicTemplate } from "@/components/pdf/Templates";
 // import { downloadPdf } from "@/lib/pdf";
@@ -371,7 +371,21 @@ function CreateCvPageContent() {
           // Also migrate guest draft to user account if exists
           if (hasGuestDraft()) {
             migrateGuestDraft(user.uid, async (uid, data) => {
-              await saveUserDraft(uid, data as CvDraftData, null); // Create new CV from guest draft
+              /**
+               * PLAN-AWARE MIGRATION:
+               * Check user plan and reuse first CV for limited plans
+               */
+              const planForMigration = await getUserPlan(uid);
+              const isLimitedForMigration = !planForMigration || planForMigration.planType === "free" || planForMigration.planType === "one_time";
+              
+              let targetCvIdForMigration: string | null = null;
+              if (isLimitedForMigration) {
+                // For limited plans, reuse first CV if exists
+                targetCvIdForMigration = await getFirstCvId(uid);
+              }
+              // Otherwise, targetCvIdForMigration stays null (create new CV for unlimited plans)
+              
+              await saveUserDraft(uid, data as CvDraftData, targetCvIdForMigration);
             }).catch((err) => {
               console.error("Failed to migrate guest draft:", err);
             });
@@ -386,9 +400,32 @@ function CreateCvPageContent() {
     checkAuthCallback();
   }, [user, authLoading, pendingProtectedAction]);
 
-  // Load existing CV if cvId is present, otherwise auto-load draft (authenticated) or guest draft
+  /**
+   * Load existing CV or draft - PLAN-AWARE LOGIC
+   * 
+   * PLAN-BASED LOADING:
+   * - Free/One-Time plans: Always load from first CV (ignore cvId parameter)
+   *   - This ensures limited plans always work with a single CV
+   *   - Prevents users from accessing multiple CVs via URL manipulation
+   * - Flex Pack/Annual Pass plans: Load CV specified by cvId parameter
+   *   - If cvId provided, load that specific CV
+   *   - If no cvId, auto-load first draft (for backward compatibility)
+   */
   useEffect(() => {
     async function loadData() {
+      // Get user plan to determine load behavior
+      let currentPlan: UserPlan | null = null;
+      if (user) {
+        try {
+          currentPlan = await getUserPlan(user.uid);
+        } catch (error) {
+          console.error("Failed to load user plan:", error);
+          // Default to free plan if plan fetch fails
+        }
+      }
+      
+      const isLimitedPlan = !currentPlan || currentPlan.planType === "free" || currentPlan.planType === "one_time";
+      
       // If editing a specific CV (authenticated only)
       if (cvId) {
         if (!user) {
@@ -398,8 +435,43 @@ function CreateCvPageContent() {
         }
 
         try {
-          // Load CV by ID using getUserDraftById for proper data structure
-          const data = await getUserDraftById(user.uid, cvId);
+          /**
+           * PLAN-AWARE LOAD LOGIC:
+           * - Limited plans: Always load first CV (ignore cvId in URL)
+           * - Unlimited plans: Load CV specified by cvId
+           */
+          let data: CvDraftData | null = null;
+          
+          if (isLimitedPlan) {
+            /**
+             * FREE/ONE-TIME PLANS: Always load first CV
+             * 
+             * Even if cvId is provided in URL, we ignore it and load the first CV.
+             * This ensures users on limited plans always work with their single CV,
+             * preventing access to multiple CVs and maintaining plan compliance.
+             */
+            const firstCvId = await getFirstCvId(user.uid);
+            if (firstCvId) {
+              data = await getUserDraftById(user.uid, firstCvId);
+              // Update URL to reflect the correct CV ID (first CV)
+              if (firstCvId !== cvId) {
+                router.replace(`/create-cv?id=${firstCvId}`, { scroll: false });
+              }
+            } else {
+              // No CV exists yet - user is creating first CV
+              // Don't load anything, let them fill the form
+              return;
+            }
+          } else {
+            /**
+             * FLEX PACK/ANNUAL PASS PLANS: Load CV specified by cvId
+             * 
+             * Users on unlimited plans can access multiple CVs, so we respect
+             * the cvId parameter and load the specific CV they requested.
+             */
+            data = await getUserDraftById(user.uid, cvId);
+          }
+          
           if (data) {
             form.reset({
               fullName: data.fullName || "",
@@ -438,7 +510,14 @@ function CreateCvPageContent() {
         return; // Don't load draft if editing specific CV
       }
 
-      // For authenticated users: load cloud draft
+      /**
+       * For authenticated users: load cloud draft
+       * 
+       * PLAN-AWARE LOADING:
+       * - getUserDraft() already returns the first CV (most recent)
+       * - For limited plans, this is the only CV they can access
+       * - For unlimited plans, this is their most recent CV (default behavior)
+       */
       if (user) {
         setDraftLoading(true);
         try {
@@ -449,6 +528,18 @@ function CreateCvPageContent() {
               const timestamp = draft.updatedAt.toDate ? draft.updatedAt.toDate() : new Date(draft.updatedAt.seconds * 1000);
               setDraftLastUpdated(timestamp);
             }
+            
+            /**
+             * For limited plans: Update URL to point to first CV ID
+             * This ensures future saves work with the correct CV document
+             */
+            if (isLimitedPlan) {
+              const firstCvId = await getFirstCvId(user.uid);
+              if (firstCvId && firstCvId !== cvId) {
+                router.replace(`/create-cv?id=${firstCvId}`, { scroll: false });
+              }
+            }
+            
             // Pre-fill form with draft data
             form.reset({
               fullName: draft.fullName || "",
@@ -509,8 +600,20 @@ function CreateCvPageContent() {
               setCurrentStep(4);
               hasLoadedDraft.current = true;
               // Migrate guest draft to cloud
+              // For limited plans, this will reuse first CV if it exists, otherwise create new
               await migrateGuestDraft(user.uid, async (uid, data) => {
-                await saveUserDraft(uid, data as CvDraftData, null); // Create new CV from guest draft
+                // Get user plan to determine save behavior
+                const planForMigration = await getUserPlan(uid);
+                const isLimitedForMigration = !planForMigration || planForMigration.planType === "free" || planForMigration.planType === "one_time";
+                
+                let targetCvIdForMigration: string | null = null;
+                if (isLimitedForMigration) {
+                  // For limited plans, reuse first CV if exists
+                  targetCvIdForMigration = await getFirstCvId(uid);
+                }
+                // Otherwise, targetCvIdForMigration stays null (create new CV)
+                
+                await saveUserDraft(uid, data as CvDraftData, targetCvIdForMigration);
               });
               setDraftStatus("success");
               setDraftMessage(t("Guest draft migrated to your account.", "تم نقل المسودة الضيف إلى حسابك."));
@@ -566,9 +669,19 @@ function CreateCvPageContent() {
     loadData();
   }, [user, cvId, form, t, router]);
 
-  // Save draft function - supports both authenticated (cloud) and guest (localStorage) modes
-  // Single draft per user policy: each save overwrites the previous draft
-  // Returns true if save was successful, false otherwise
+  /**
+   * Save draft function - supports both authenticated (cloud) and guest (localStorage) modes
+   * 
+   * PLAN-AWARE LOGIC:
+   * - Free/One-Time plans: Always reuse the first CV document (single CV limit)
+   *   - If first CV exists, update it
+   *   - If no CV exists, create new document
+   * - Flex Pack/Annual Pass plans: Allow multiple CVs
+   *   - If cvId provided, update that CV
+   *   - If no cvId, create new CV document
+   * 
+   * Returns true if save was successful, false otherwise
+   */
   async function handleSaveDraft(): Promise<boolean> {
     const values = form.getValues();
     const draftData: GuestDraftData = {
@@ -593,17 +706,69 @@ function CreateCvPageContent() {
       setDraftMessage(null);
 
       try {
-        // Save with cvId if editing existing CV, otherwise create new
-        const savedCvId = await saveUserDraft(user.uid, draftData as CvDraftData, cvId || null);
+        /**
+         * PLAN-AWARE SAVE LOGIC:
+         * Determine which CV ID to use based on user's plan and current state
+         */
+        let targetCvId: string | null = null;
+        
+        // Get current user plan (default to free if not loaded yet)
+        const currentPlan = userPlan || await getUserPlan(user.uid);
+        const isLimitedPlan = !currentPlan || currentPlan.planType === "free" || currentPlan.planType === "one_time";
+        
+        if (isLimitedPlan) {
+          /**
+           * FREE/ONE-TIME PLANS: Always reuse first CV document
+           * 
+           * Logic:
+           * 1. If first CV exists, use its ID (will update existing document)
+           * 2. If no CV exists, pass null (will create new document)
+           * 
+           * This ensures users on limited plans always work with a single CV document,
+           * preventing Firestore bloat and maintaining plan compliance.
+           */
+          const firstCvId = await getFirstCvId(user.uid);
+          targetCvId = firstCvId;
+          
+          // Note: If firstCvId is null, targetCvId stays null and a new CV will be created
+          // If firstCvId exists, we update that document (reusing it)
+        } else {
+          /**
+           * FLEX PACK/ANNUAL PASS PLANS: Allow multiple CVs
+           * 
+           * Logic:
+           * 1. If cvId is provided (editing existing CV), use it
+           * 2. If no cvId (creating new CV), pass null to create new document
+           * 
+           * These plans allow users to create multiple CV documents within their limits.
+           */
+          targetCvId = cvId || null;
+        }
+
+        // Save with determined cvId (may be null for new CVs)
+        const savedCvId = await saveUserDraft(user.uid, draftData as CvDraftData, targetCvId);
         setDraftExists(true);
         setDraftLastUpdated(new Date());
         hasUnsavedChanges.current = false;
         setDraftStatus("success");
         setDraftMessage(t("Draft saved successfully!", "تم حفظ المسودة بنجاح!"));
-        // Update URL if new CV was created (cvId was null but now we have an ID)
-        if (!cvId && savedCvId) {
+        
+        /**
+         * Update URL if:
+         * 1. We created a new CV (targetCvId was null but now we have savedCvId)
+         * 2. We're on a limited plan and reused first CV (need to update URL to show correct ID)
+         */
+        if (isLimitedPlan && !targetCvId && savedCvId) {
+          // New CV created on limited plan - update URL
           router.replace(`/create-cv?id=${savedCvId}`, { scroll: false });
+        } else if (!cvId && savedCvId && !isLimitedPlan) {
+          // New CV created on unlimited plan - update URL
+          router.replace(`/create-cv?id=${savedCvId}`, { scroll: false });
+        } else if (isLimitedPlan && targetCvId && targetCvId !== cvId) {
+          // Limited plan: CV was reused but URL doesn't match - update URL
+          router.replace(`/create-cv?id=${targetCvId}`, { scroll: false });
         }
+        
         setTimeout(() => {
           setDraftStatus("idle");
           setDraftMessage(null);
@@ -1311,7 +1476,7 @@ function CreateCvPageContent() {
                   </a>
                 </Button>
                 <Button variant="outline" size="sm" asChild>
-                  <a href="mailto:support@serapro.app?subject=CV Builder Help">
+                  <a href="mailto:contact.serapro@gmail.com?subject=CV Builder Help">
                     {t("Contact Support", "اتصل بالدعم")}
                   </a>
                 </Button>

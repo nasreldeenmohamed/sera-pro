@@ -198,7 +198,7 @@ export function Footer() {
               </li>
               <li>
                 <a 
-                  href="mailto:support@serapro.app" 
+                  href="mailto:contact.serapro@gmail.com" 
                   className="hover:underline hover:text-[#0d47a1] dark:hover:text-blue-400 transition-colors"
                 >
                   {t("Contact", "تواصل")}
@@ -270,7 +270,7 @@ export function Footer() {
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <a
-                      href="https://facebook.com/serapro" // TODO: Replace with actual social media URLs
+                      href="https://www.facebook.com/seeerapro"
                       aria-label={t("Facebook", "فيسبوك")}
                       className="flex items-center justify-center h-9 w-9 rounded-md bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-[#0d47a1] hover:text-white dark:hover:bg-[#0d47a1] transition-all"
                       target="_blank"
@@ -386,10 +386,10 @@ export function Footer() {
             <p className="mt-1">
               {t("Cairo, Egypt", "القاهرة، مصر")} •{" "}
               <a 
-                href="mailto:support@serapro.app" 
+                href="mailto:contact.serapro@gmail.com" 
                 className="hover:underline hover:text-[#0d47a1] dark:hover:text-blue-400 transition-colors"
               >
-                support@serapro.app
+                contact.serapro@gmail.com
               </a>
             </p>
           </div>

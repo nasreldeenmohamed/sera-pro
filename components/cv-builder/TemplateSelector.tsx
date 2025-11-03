@@ -4,21 +4,26 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Check, Lock } from "lucide-react";
-import { TEMPLATES, hasTemplateAccess, getUpgradeMessage, type Template } from "@/lib/templates";
+import { TEMPLATES, hasTemplateAccess, getUpgradeMessage, TEMPLATE_GROUP_1_SIZE, type Template } from "@/lib/templates";
 import type { UserPlan } from "@/firebase/firestore";
 
 /**
  * Template Selector Component
  * 
- * Displays visual previews of available CV templates and allows users to select one.
+ * Displays visual previews of all available CV templates and allows users to select one.
  * Template selection happens before data entry to show users how their CV will look.
  * 
+ * Template Access Groups:
+ * - Group 1: First TEMPLATE_GROUP_1_SIZE templates (accessible to Free and One-Time plans)
+ * - Group 2: All remaining templates (locked for Free/One-Time, unlocked for Flex Pack/Annual Pass)
+ * 
  * Features:
- * - Shows all templates with visual previews
- * - Locks premium templates for free users
+ * - Shows ALL templates with visual previews
+ * - Locks Group 2 templates for Free and One-Time plan users
  * - Shows lock icons and upgrade tooltips for locked templates
  * - Prompts upgrade when clicking locked templates
- * - Organizes templates by access level
+ * - Visual distinction for locked templates (dimming, lock overlay)
+ * - Fully bilingual (Arabic/English) with RTL support
  * 
  * Future extensibility:
  * - Add actual template preview images/thumbnails
@@ -26,6 +31,7 @@ import type { UserPlan } from "@/firebase/firestore";
  * - Add template search functionality
  * - Add template preview rendering with sample data
  * - Add template customization options (colors, fonts, layouts)
+ * - Easily adjust group visibility by changing TEMPLATE_GROUP_1_SIZE in lib/templates.ts
  */
 type TemplateSelectorProps = {
   selectedTemplate: string;
@@ -51,23 +57,25 @@ export function TemplateSelector({
     const hasAccess = hasTemplateAccess(template, userPlan);
     
     if (!hasAccess) {
-      // Show upgrade prompt
+      // Show upgrade prompt for locked templates (Group 2)
       if (onUpgrade) {
         onUpgrade();
       } else {
-        // Fallback: show alert
+        // Fallback: show alert with upgrade message
         alert(getUpgradeMessage(template, isAr));
       }
       return;
     }
 
-    // Allow selection
+    // Allow selection for accessible templates
     onSelect(template.key);
   };
 
-  // Separate templates by access level for better organization
-  const basicTemplates = TEMPLATES.filter((t) => t.accessLevel === "basic");
-  const premiumTemplates = TEMPLATES.filter((t) => t.accessLevel === "premium");
+  // Separate templates by group for display organization
+  // Group 1: First TEMPLATE_GROUP_1_SIZE templates (always visible)
+  // Group 2: Remaining templates (locked for Free/One-Time, unlocked for Flex Pack/Annual Pass)
+  const group1Templates = TEMPLATES.slice(0, TEMPLATE_GROUP_1_SIZE);
+  const group2Templates = TEMPLATES.slice(TEMPLATE_GROUP_1_SIZE);
 
   return (
     <div className="space-y-6" dir={isAr ? "rtl" : "ltr"}>
@@ -83,30 +91,27 @@ export function TemplateSelector({
         </p>
       </div>
 
-      {/* Basic Templates Section */}
-      {basicTemplates.length > 0 && (
+      {/* Group 1 Templates - Always Accessible */}
+      {group1Templates.length > 0 && (
         <div className="space-y-4">
           <h3 className="text-lg font-medium text-zinc-700 dark:text-zinc-300">
-            {t("Basic Templates", "القوالب الأساسية")}
+            {t("Available Templates", "القوالب المتاحة")}
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {basicTemplates.map((template) => {
+            {group1Templates.map((template) => {
               const isSelected = selectedTemplate === template.key;
-              const hasAccess = hasTemplateAccess(template, userPlan);
+              // Group 1 templates are always accessible
+              const hasAccess = true;
 
               return (
                 <Card
                   key={template.key}
-                  className={`transition-all ${
-                    hasAccess
-                      ? `cursor-pointer hover:shadow-lg ${
-                          isSelected
-                            ? "ring-2 ring-blue-600 border-blue-600"
-                            : "hover:border-blue-300"
-                        }`
-                      : "opacity-75 cursor-not-allowed"
+                  className={`transition-all cursor-pointer hover:shadow-lg ${
+                    isSelected
+                      ? "ring-2 ring-blue-600 border-blue-600"
+                      : "hover:border-blue-300"
                   }`}
-                  onClick={() => hasAccess && handleTemplateClick(template)}
+                  onClick={() => handleTemplateClick(template)}
                 >
                   <CardHeader className="relative">
                     {/* Popular Badge */}
@@ -174,14 +179,14 @@ export function TemplateSelector({
         </div>
       )}
 
-      {/* Premium Templates Section */}
-      {premiumTemplates.length > 0 && (
+      {/* Group 2 Templates - Premium Plans Only */}
+      {group2Templates.length > 0 && (
         <div className="space-y-4">
           <h3 className="text-lg font-medium text-zinc-700 dark:text-zinc-300">
             {t("Premium Templates", "القوالب المميزة")}
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {premiumTemplates.map((template) => {
+            {group2Templates.map((template) => {
               const isSelected = selectedTemplate === template.key;
               const hasAccess = hasTemplateAccess(template, userPlan);
 
@@ -196,14 +201,14 @@ export function TemplateSelector({
                                 ? "ring-2 ring-blue-600 border-blue-600"
                                 : "hover:border-blue-300"
                             }`
-                          : "opacity-75 cursor-not-allowed"
+                          : "opacity-60 cursor-not-allowed"
                       }`}
-                      onClick={() => hasAccess && handleTemplateClick(template)}
+                      onClick={() => handleTemplateClick(template)}
                     >
-                      {/* Lock Overlay for locked templates */}
+                      {/* Lock Overlay for locked templates (Group 2 when user doesn't have premium plan) */}
                       {!hasAccess && (
-                        <div className="absolute inset-0 bg-zinc-900/50 dark:bg-zinc-900/70 rounded-lg z-10 flex items-center justify-center">
-                          <div className="bg-white dark:bg-zinc-800 rounded-full p-3">
+                        <div className="absolute inset-0 bg-zinc-900/60 dark:bg-zinc-900/80 rounded-lg z-10 flex items-center justify-center backdrop-blur-sm">
+                          <div className="bg-white dark:bg-zinc-800 rounded-full p-3 shadow-lg">
                             <Lock className="h-6 w-6 text-zinc-600 dark:text-zinc-400" />
                           </div>
                         </div>
@@ -221,15 +226,17 @@ export function TemplateSelector({
                             <Check className="h-4 w-4" />
                           </div>
                         )}
-                        {/* Lock Icon Badge */}
+                        {/* Lock Icon Badge - Visible when template is locked */}
                         {!hasAccess && (
-                          <div className={`absolute ${isAr ? "right-2" : "left-2"} top-2 bg-zinc-700 text-white rounded-full p-1 z-10`}>
+                          <div className={`absolute ${isAr ? "right-2" : "left-2"} top-2 bg-zinc-700 dark:bg-zinc-600 text-white rounded-full p-1 z-20`}>
                             <Lock className="h-4 w-4" />
                           </div>
                         )}
                         {/* Template Preview */}
                         <div 
-                          className="aspect-[3/4] rounded-md flex items-center justify-center mb-3 border border-zinc-200 dark:border-zinc-700 relative overflow-hidden"
+                          className={`aspect-[3/4] rounded-md flex items-center justify-center mb-3 border border-zinc-200 dark:border-zinc-700 relative overflow-hidden ${
+                            !hasAccess ? "filter grayscale" : ""
+                          }`}
                           style={{
                             backgroundColor: template.previewColors.secondary,
                             borderColor: template.previewColors.primary + "40",
@@ -272,14 +279,17 @@ export function TemplateSelector({
                         <CardDescription className="text-sm">
                           {t(template.description.en, template.description.ar)}
                         </CardDescription>
+                        {/* Lock indicator text */}
                         {!hasAccess && (
-                          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-2">
-                            {t("Premium Template", "قالب مميز")}
+                          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-2 flex items-center gap-1">
+                            <Lock className="h-3 w-3" />
+                            {t("Premium Plan Required", "يتطلب خطة مميزة")}
                           </p>
                         )}
                       </CardContent>
                     </Card>
                   </TooltipTrigger>
+                  {/* Tooltip showing upgrade message for locked templates */}
                   {!hasAccess && (
                     <TooltipContent>
                       <p>{getUpgradeMessage(template, isAr)}</p>

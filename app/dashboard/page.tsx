@@ -8,24 +8,30 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useLocale } from "@/lib/locale-context";
 import { SiteLayout } from "@/components/layout/SiteLayout";
-import { Zap, Star, Crown, FileText } from "lucide-react";
+import { Zap, Star, Crown, FileText, Lock } from "lucide-react";
 import { ClassicTemplate } from "@/components/pdf/Templates";
 import { downloadPdf } from "@/lib/pdf";
 import { CvPreviewCard } from "@/components/dashboard/CvPreviewCard";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 
 /**
  * Dashboard Page - CV Management
  * 
- * Displays user's CVs with plan-based filtering:
- * - Free/One-Time plans: Shows only first CV (single CV allowed)
- * - Higher plans (Flex Pack/Annual Pass): Shows all CVs
+ * Displays user's CVs with plan-based access control:
+ * - Free/One-Time plans: First CV enabled, others locked (1 CV limit)
+ * - Flex Pack plan: First 5 CVs enabled, others locked (5 CV limit)
+ * - Annual Pass plan: All CVs enabled (unlimited)
  * 
  * Features:
- * - Clickable CV preview cards navigate to edit page
+ * - "Create New CV" button conditionally enabled/disabled based on plan and CV count
+ * - CV preview cards show enabled/disabled state with visual indicators
+ * - Disabled CVs show lock overlay, "Upgrade" button, and tooltips
+ * - Clicking disabled CVs redirects to pricing page for upgrade
  * - Download button per CV (watermarked or not based on plan)
- * - Delete functionality
+ * - Delete functionality available for all CVs
  * - Simplified plan summary (no pricing section - moved to /pricing)
  * - Conditional watermark based on user plan
+ * - Downgrade handling: When plan changes, only most recent N CVs remain enabled
  * 
  * DEFAULT BEHAVIOR: Arabic (ar) with RTL layout
  */
@@ -146,15 +152,89 @@ export default function DashboardPage() {
     return !plan || plan.planType === "free";
   }, [plan]);
 
-  // Filter CVs based on plan - free/one_time users see only their first CV
-  const visibleCvs = useMemo(() => {
-    if (!plan || plan.planType === "free" || plan.planType === "one_time") {
-      // Free and one_time plans: show only first CV
-      return cvs.slice(0, 1);
+  /**
+   * Calculate the maximum number of CVs allowed based on user's plan
+   * 
+   * Plan limits:
+   * - Free/One-Time: 1 CV maximum
+   * - Flex Pack: 5 CVs maximum
+   * - Annual Pass: Unlimited (returns null)
+   * 
+   * @returns Maximum CV count or null for unlimited
+   */
+  const maxCvLimit = useMemo(() => {
+    if (!plan) return 1; // Default to free plan limit
+    switch (plan.planType) {
+      case "free":
+      case "one_time":
+        return 1;
+      case "flex_pack":
+        return 5;
+      case "annual_pass":
+        return null; // Unlimited
+      default:
+        return 1;
     }
-    // Higher plans (flex_pack, annual_pass): show all CVs
-    return cvs;
-  }, [cvs, plan]);
+  }, [plan]);
+
+  /**
+   * Determine which CVs are enabled based on plan limits
+   * 
+   * CVs are sorted by updatedAt descending (newest first)
+   * When downgrading, we keep only the most recent N CVs enabled
+   * 
+   * Returns array with enabled status for each CV
+   */
+  const cvsWithStatus = useMemo(() => {
+    if (!maxCvLimit) {
+      // Annual Pass: All CVs are enabled (unlimited)
+      return cvs.map(cv => ({ cv, enabled: true }));
+    }
+    
+    // For limited plans: First N CVs are enabled, rest are disabled
+    return cvs.map((cv, index) => ({
+      cv,
+      enabled: index < maxCvLimit,
+    }));
+  }, [cvs, maxCvLimit]);
+
+  /**
+   * Check if user can create a new CV based on their plan and current CV count
+   * 
+   * Rules:
+   * - Free/One-Time: Can create only if they have 0 CVs
+   * - Flex Pack: Can create if they have less than 5 CVs
+   * - Annual Pass: Always allowed (unlimited)
+   */
+  const canCreateNewCv = useMemo(() => {
+    if (!maxCvLimit) return true; // Annual Pass: unlimited
+    return cvs.length < maxCvLimit;
+  }, [cvs.length, maxCvLimit]);
+
+  /**
+   * Get tooltip message for disabled "Create New CV" button
+   * 
+   * Different messages based on plan type and limit reason
+   */
+  const createCvTooltip = useMemo(() => {
+    if (canCreateNewCv) return "";
+    
+    if (!plan || plan.planType === "free" || plan.planType === "one_time") {
+      return t(
+        "Upgrade your plan to create more CVs",
+        "قم بترقية خطتك لإنشاء المزيد من السير"
+      );
+    }
+    
+    if (plan.planType === "flex_pack") {
+      return t(
+        "You've reached your Flex Pack CV limit—upgrade for more",
+        "لقد وصلت إلى حد سير باقة Flex Pack—قم بالترقية للحصول على المزيد"
+      );
+    }
+    
+    return "";
+  }, [canCreateNewCv, plan, t]);
 
   /**
    * Delete a CV and refresh the list from Firestore
@@ -342,12 +422,17 @@ export default function DashboardPage() {
         <div className="mb-8">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-xl font-semibold">{t("Your CVs", "سيرك الذاتية")}</h2>
-            {!cvsLoading && !cvsError && visibleCvs.length > 0 && (
+            {!cvsLoading && !cvsError && cvs.length > 0 && (
               <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                {visibleCvs.length === 1 
+                {cvs.length === 1 
                   ? t("1 CV", "سيرة واحدة")
-                  : t(`${visibleCvs.length} CVs`, `${visibleCvs.length} سيرة`)
+                  : t(`${cvs.length} CVs`, `${cvs.length} سيرة`)
                 }
+                {maxCvLimit !== null && (
+                  <span className="ml-2">
+                    ({t("Limit", "الحد")}: {maxCvLimit === 1 ? "1" : `${cvsWithStatus.filter(c => c.enabled).length}/${maxCvLimit}`})
+                  </span>
+                )}
               </p>
             )}
           </div>
@@ -379,8 +464,72 @@ export default function DashboardPage() {
             </Card>
           )}
 
-          {/* Empty State - No CVs found */}
-          {!cvsLoading && !cvsError && visibleCvs.length === 0 && (
+
+          {/* CVs List - Success State */}
+          {!cvsLoading && !cvsError && cvs.length > 0 && (
+            <>
+              {/* Create New CV Button - Conditionally enabled/disabled */}
+              <div className="mb-6 flex justify-end">
+                {canCreateNewCv ? (
+                  <Button
+                    onClick={() => router.push("/create-cv")}
+                    className="text-white"
+                    style={{ backgroundColor: "#0d47a1" }}
+                  >
+                    {t("Create New CV", "إنشاء سيرة جديدة")}
+                  </Button>
+                ) : (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div>
+                        <Button
+                          onClick={() => router.push("/pricing")}
+                          disabled={true}
+                          variant="outline"
+                          className="opacity-60 cursor-not-allowed"
+                        >
+                          <Lock className={`h-4 w-4 ${isAr ? "ml-2" : "mr-2"}`} />
+                          {t("Create New CV", "إنشاء سيرة جديدة")}
+                        </Button>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{createCvTooltip}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+              </div>
+
+              {/* CV Cards Grid - All CVs shown, some disabled */}
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {cvsWithStatus.map(({ cv, enabled }) => (
+                  <CvPreviewCard
+                    key={cv.id}
+                    cv={cv}
+                    requiresWatermark={requiresWatermark}
+                    enabled={enabled}
+                    maxCvLimit={maxCvLimit}
+                    planType={plan?.planType}
+                    onEdit={(cvId) => {
+                      if (enabled) {
+                        router.push(`/create-cv?id=${cvId}`);
+                      } else {
+                        router.push("/pricing");
+                      }
+                    }}
+                    onDownload={downloadCv}
+                    onDelete={onDelete}
+                    busy={busy}
+                    isAr={isAr}
+                    t={t}
+                  />
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* Empty State - Show Create New CV button even when no CVs exist */}
+          {!cvsLoading && !cvsError && cvs.length === 0 && (
             <Card className="p-8 text-center">
               <div className="max-w-md mx-auto space-y-4">
                 <div className="h-16 w-16 mx-auto rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
@@ -407,25 +556,6 @@ export default function DashboardPage() {
                 </Button>
               </div>
             </Card>
-          )}
-
-          {/* CVs List - Success State */}
-          {!cvsLoading && !cvsError && visibleCvs.length > 0 && (
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {visibleCvs.map((cv) => (
-                <CvPreviewCard
-                  key={cv.id}
-                  cv={cv}
-                  requiresWatermark={requiresWatermark}
-                  onEdit={(cvId) => router.push(`/create-cv?id=${cvId}`)}
-                  onDownload={downloadCv}
-                  onDelete={onDelete}
-                  busy={busy}
-                  isAr={isAr}
-                  t={t}
-                />
-              ))}
-            </div>
           )}
         </div>
       </section>

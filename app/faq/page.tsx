@@ -140,8 +140,8 @@ export default function FAQPage() {
             "ماذا يحدث إذا فقدت حسابي؟"
           ),
           a: t(
-            "Use the password reset feature on the login page. If you're still having issues, contact support@serapro.app. We can help you recover your account and access your saved CVs.",
-            "استخدم ميزة إعادة تعيين كلمة المرور في صفحة تسجيل الدخول. إذا واجهت مشاكل، تواصل مع support@serapro.app. يمكننا مساعدتك في استعادة حسابك والوصول لسيرك المحفوظة."
+            "Use the password reset feature on the login page. If you're still having issues, contact contact.serapro@gmail.com. We can help you recover your account and access your saved CVs.",
+            "استخدم ميزة إعادة تعيين كلمة المرور في صفحة تسجيل الدخول. إذا واجهت مشاكل، تواصل مع contact.serapro@gmail.com. يمكننا مساعدتك في استعادة حسابك والوصول لسيرك المحفوظة."
           ),
         },
       ],
@@ -261,8 +261,8 @@ export default function FAQPage() {
             "هل يمكنني حذف حسابي وبياناتي؟"
           ),
           a: t(
-            "Yes. You can request account deletion by contacting support@serapro.app. We will permanently delete your account and all associated data, including CV drafts, within 30 days of your request. This action cannot be undone.",
-            "نعم. يمكنك طلب حذف الحساب بالتواصل مع support@serapro.app. سنحذف حسابك وجميع البيانات المرتبطة بشكل دائم، بما في ذلك مسودات السير، خلال 30 يومًا من طلبك. هذا الإجراء لا يمكن التراجع عنه."
+            "Yes. You can request account deletion by contacting contact.serapro@gmail.com. We will permanently delete your account and all associated data, including CV drafts, within 30 days of your request. This action cannot be undone.",
+            "نعم. يمكنك طلب حذف الحساب بالتواصل مع contact.serapro@gmail.com. سنحذف حسابك وجميع البيانات المرتبطة بشكل دائم، بما في ذلك مسودات السير، خلال 30 يومًا من طلبك. هذا الإجراء لا يمكن التراجع عنه."
           ),
         },
       ],
@@ -278,8 +278,8 @@ export default function FAQPage() {
             "لم يتم تنزيل سيرتي. ماذا أفعل؟"
           ),
           a: t(
-            "First, check if you have a paid plan active. Free accounts can only download watermarked versions. Ensure your browser allows downloads and check your Downloads folder. If issues persist, try a different browser or contact support@serapro.app.",
-            "أولاً، تحقق إذا كانت لديك خطة مدفوعة نشطة. الحسابات المجانية يمكنها تنزيل النسخ المائية فقط. تأكد أن متصفحك يسمح بالتنزيلات وتحقق من مجلد التنزيلات. إذا استمرت المشاكل، جرّب متصفحًا آخر أو تواصل مع support@serapro.app."
+            "First, check if you have a paid plan active. Free accounts can only download watermarked versions. Ensure your browser allows downloads and check your Downloads folder. If issues persist, try a different browser or contact contact.serapro@gmail.com.",
+            "أولاً، تحقق إذا كانت لديك خطة مدفوعة نشطة. الحسابات المجانية يمكنها تنزيل النسخ المائية فقط. تأكد أن متصفحك يسمح بالتنزيلات وتحقق من مجلد التنزيلات. إذا استمرت المشاكل، جرّب متصفحًا آخر أو تواصل مع contact.serapro@gmail.com."
           ),
         },
         {
@@ -288,8 +288,8 @@ export default function FAQPage() {
             "لا أستطيع تسجيل الدخول لحسابي."
           ),
           a: t(
-            "Use the 'Forgot Password' link on the login page to reset your password. If you signed up with Google or another provider, use that same method. If problems continue, contact support@serapro.app with your email address.",
-            "استخدم رابط 'نسيت كلمة المرور' في صفحة تسجيل الدخول لإعادة تعيين كلمة المرور. إذا سجلت عبر Google أو مزود آخر، استخدم نفس الطريقة. إذا استمرت المشاكل، تواصل مع support@serapro.app مع عنوان بريدك الإلكتروني."
+            "Use the 'Forgot Password' link on the login page to reset your password. If you signed up with Google or another provider, use that same method. If problems continue, contact contact.serapro@gmail.com with your email address.",
+            "استخدم رابط 'نسيت كلمة المرور' في صفحة تسجيل الدخول لإعادة تعيين كلمة المرور. إذا سجلت عبر Google أو مزود آخر، استخدم نفس الطريقة. إذا استمرت المشاكل، تواصل مع contact.serapro@gmail.com مع عنوان بريدك الإلكتروني."
           ),
         },
         {
@@ -308,8 +308,8 @@ export default function FAQPage() {
             "تمت معالجة دفاعي لكن لا أرى خطتي مفعّلة."
           ),
           a: t(
-            "This usually resolves automatically within a few minutes. Try logging out and back in, or refresh the page. If after 15 minutes your plan isn't active, contact support@serapro.app with your payment receipt or transaction ID, and we'll resolve it promptly.",
-            "عادة ما يُحل هذا تلقائيًا خلال بضع دقائق. جرّب تسجيل الخروج والدخول مرة أخرى، أو حدّث الصفحة. إذا لم تكن خطتك نشطة بعد 15 دقيقة، تواصل مع support@serapro.app مع إيصال الدفع أو معرف المعاملة، وسنحل المشكلة بسرعة."
+            "This usually resolves automatically within a few minutes. Try logging out and back in, or refresh the page. If after 15 minutes your plan isn't active, contact contact.serapro@gmail.com with your payment receipt or transaction ID, and we'll resolve it promptly.",
+            "عادة ما يُحل هذا تلقائيًا خلال بضع دقائق. جرّب تسجيل الخروج والدخول مرة أخرى، أو حدّث الصفحة. إذا لم تكن خطتك نشطة بعد 15 دقيقة، تواصل مع contact.serapro@gmail.com مع إيصال الدفع أو معرف المعاملة، وسنحل المشكلة بسرعة."
           ),
         },
       ],
@@ -325,8 +325,8 @@ export default function FAQPage() {
             "كيف يمكنني التواصل مع الدعم؟"
           ),
           a: t(
-            "Email us at support@serapro.app for any questions, issues, or feedback. We typically respond within 24-48 hours. For urgent payment or account issues, include 'URGENT' in your subject line.",
-            "راسلنا على support@serapro.app لأي أسئلة أو مشاكل أو ملاحظات. عادة نرد خلال 24-48 ساعة. للمشاكل العاجلة المتعلقة بالدفع أو الحساب، أضف 'URGENT' في موضوع الرسالة."
+            "Email us at contact.serapro@gmail.com for any questions, issues, or feedback. We typically respond within 24-48 hours. For urgent payment or account issues, include 'URGENT' in your subject line.",
+            "راسلنا على contact.serapro@gmail.com لأي أسئلة أو مشاكل أو ملاحظات. عادة نرد خلال 24-48 ساعة. للمشاكل العاجلة المتعلقة بالدفع أو الحساب، أضف 'URGENT' في موضوع الرسالة."
           ),
         },
         {
@@ -335,8 +335,8 @@ export default function FAQPage() {
             "هل تقدمون استرداد الأموال؟"
           ),
           a: t(
-            "Refund requests are handled case-by-case. Contact support@serapro.app within 7 days of purchase with your reason. If you've already downloaded a CV, refunds may not be applicable, but we'll work with you to find a solution.",
-            "طلبات الاسترداد تُعالج كل حالة على حدة. تواصل مع support@serapro.app خلال 7 أيام من الشراء مع سببك. إذا كنت قد نزلت سيرة بالفعل، قد لا ينطبق الاسترداد، لكننا سنعمل معك لإيجاد حل."
+            "Refund requests are handled case-by-case. Contact contact.serapro@gmail.com within 7 days of purchase with your reason. If you've already downloaded a CV, refunds may not be applicable, but we'll work with you to find a solution.",
+            "طلبات الاسترداد تُعالج كل حالة على حدة. تواصل مع contact.serapro@gmail.com خلال 7 أيام من الشراء مع سببك. إذا كنت قد نزلت سيرة بالفعل، قد لا ينطبق الاسترداد، لكننا سنعمل معك لإيجاد حل."
           ),
         },
         {
@@ -345,8 +345,8 @@ export default function FAQPage() {
             "هل يمكنني اقتراح ميزة؟"
           ),
           a: t(
-            "Absolutely! We welcome feedback and feature suggestions. Email support@serapro.app with your ideas. User feedback helps us improve Sera Pro for everyone.",
-            "بالتأكيد! نرحب بالملاحظات واقتراحات الميزات. راسلنا على support@serapro.app بأفكارك. ملاحظات المستخدمين تساعدنا في تحسين سيرة برو للجميع."
+            "Absolutely! We welcome feedback and feature suggestions. Email contact.serapro@gmail.com with your ideas. User feedback helps us improve Sera Pro for everyone.",
+            "بالتأكيد! نرحب بالملاحظات واقتراحات الميزات. راسلنا على contact.serapro@gmail.com بأفكارك. ملاحظات المستخدمين تساعدنا في تحسين سيرة برو للجميع."
           ),
         },
       ],
@@ -425,7 +425,7 @@ export default function FAQPage() {
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Link
-                href="mailto:support@serapro.app"
+                href="mailto:contact.serapro@gmail.com"
                 className="px-4 py-2 text-sm rounded-md text-white hover:opacity-90 transition-opacity"
                 style={{ backgroundColor: "#0d47a1" }}
               >

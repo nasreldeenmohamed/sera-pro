@@ -204,31 +204,6 @@ export default function PricingPage() {
               </ul>
             </div>
           </div>
-
-          {/* CTA Section */}
-          <div className="mt-10 rounded-2xl border p-8 text-center" style={{ backgroundColor: "#0d47a1" }}>
-            <h3 className="text-xl font-semibold text-white mb-2">
-              {t(
-                "Ready to craft your standout CV?",
-                "جاهز لإنشاء سيرتك المتميزة؟"
-              )}
-            </h3>
-            <p className="text-sm text-white opacity-90 mb-6">
-              {t("Start free, upgrade anytime.", "ابدأ مجانًا ويمكنك الترقية لاحقًا.")}
-            </p>
-            <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <Button
-                asChild
-                className="text-black"
-                style={{ backgroundColor: "#d4af37" }}
-              >
-                <Link href="/create-cv">{t("Start Now", "ابدأ الآن")}</Link>
-              </Button>
-              <Button asChild variant="secondary" className="bg-white text-black hover:bg-zinc-100">
-                <Link href="/auth">{t("Sign In", "تسجيل الدخول")}</Link>
-              </Button>
-            </div>
-          </div>
         </div>
       </section>
     </SiteLayout>
