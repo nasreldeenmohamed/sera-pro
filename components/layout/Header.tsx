@@ -1,5 +1,7 @@
 "use client";
 import Link from "next/link";
+import Image from "next/image";
+import { useState } from "react";
 import { useLocale } from "@/lib/locale-context";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
@@ -26,13 +28,33 @@ import { UKFlag, EgyptFlag } from "@/components/ui/flags";
 export function Header() {
   const { isAr, t, setLocale } = useLocale();
   const { user, loading } = useAuth();
+  // State to handle logo image loading errors with fallback
+  const [logoError, setLogoError] = useState(false);
 
   return (
     <header className="sticky top-0 z-50 border-b bg-white dark:bg-black backdrop-blur-sm bg-opacity-95">
       <div className="flex items-center justify-between px-4 py-3 sm:px-6 md:px-10">
         {/* Brand logo/name - links to home */}
+        {/* UPDATED: Now using high-resolution logo image with fallback to placeholder if image fails */}
         <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-          <div className="h-8 w-8 rounded-md" style={{ backgroundColor: "#0d47a1" }} />
+          {/* Logo image with fallback to colored placeholder if loading fails */}
+          {logoError ? (
+            // Fallback: Show colored placeholder if logo image fails to load
+            <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-md flex-shrink-0" style={{ backgroundColor: "#0d47a1" }} />
+          ) : (
+            <div className="h-8 w-8 sm:h-10 sm:w-10 flex-shrink-0 relative">
+              <Image
+                src="/assets/images/sera_pro_logo_hd.png"
+                alt="Sera Pro - سيرة برو Logo"
+                width={48}
+                height={48}
+                className="h-full w-full object-contain"
+                priority
+                unoptimized
+                onError={() => setLogoError(true)}
+              />
+            </div>
+          )}
           <span className="text-base sm:text-lg font-semibold tracking-tight">
             Sera Pro - سيرة برو
           </span>

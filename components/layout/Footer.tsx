@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useLocale } from "@/lib/locale-context";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Input } from "@/components/ui/input";
@@ -46,6 +47,8 @@ export function Footer() {
   const { isAr, t, setLocale } = useLocale();
   const [email, setEmail] = useState("");
   const [newsletterStatus, setNewsletterStatus] = useState<"idle" | "success" | "error">("idle");
+  // State to handle logo image loading errors with fallback
+  const [logoError, setLogoError] = useState(false);
 
   /**
    * Handle newsletter subscription
@@ -88,12 +91,26 @@ export function Footer() {
           <div className="space-y-4">
             <div>
               {/* Clickable Logo - links to homepage */}
+              {/* UPDATED: Now using high-resolution logo image with fallback to placeholder if image fails */}
               <Link 
                 href="/" 
                 className="flex items-center gap-2 hover:opacity-80 transition-opacity"
                 aria-label={t("Home", "الرئيسية")}
               >
-                <div className="h-8 w-8 rounded-md flex-shrink-0" style={{ backgroundColor: "#0d47a1" }} />
+                {logoError ? (
+                  // Fallback: Show colored placeholder if logo image fails to load
+                  <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-md flex-shrink-0" style={{ backgroundColor: "#0d47a1" }} />
+                ) : (
+                  <Image
+                    src="/assets/images/sera_pro_logo_hd.png"
+                    alt="Sera Pro - سيرة برو Logo"
+                    width={48}
+                    height={48}
+                    className="h-8 w-8 sm:h-10 sm:w-10 object-contain flex-shrink-0"
+                    unoptimized
+                    onError={() => setLogoError(true)}
+                  />
+                )}
                 <span className="text-base font-semibold">Sera Pro - سيرة برو</span>
               </Link>
             </div>

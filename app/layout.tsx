@@ -20,6 +20,45 @@ export const metadata: Metadata = {
   // App name reflects bilingual brand
   title: "Sera Pro - سيرة برو",
   description: "AI-powered Arabic-English CV builder with RTL support",
+  // UPDATED: Added comprehensive favicon and icon configuration
+  // Next.js App Router automatically detects app/favicon.ico, but metadata ensures proper display
+  icons: {
+    // Main favicon - browser tab icon (replaces app/favicon.ico when logo is uploaded)
+    icon: [
+      {
+        url: "/assets/images/sera_pro_logo_hd.png",
+        sizes: "any",
+        type: "image/png",
+      },
+      // Fallback to favicon.ico if logo not yet uploaded
+      {
+        url: "/favicon.ico",
+        sizes: "16x16 32x32",
+        type: "image/x-icon",
+      },
+    ],
+    // Apple touch icon for iOS home screen
+    apple: [
+      {
+        url: "/assets/images/sera_pro_logo_hd.png",
+        sizes: "180x180",
+        type: "image/png",
+      },
+    ],
+    // Other icon sizes for different contexts
+    shortcut: "/assets/images/sera_pro_logo_hd.png",
+  },
+  openGraph: {
+    title: "Sera Pro - سيرة برو",
+    description: "AI-powered Arabic-English CV builder with RTL support",
+    images: ["/assets/images/sera_pro_logo_hd.png"],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Sera Pro - سيرة برو",
+    description: "AI-powered Arabic-English CV builder with RTL support",
+    images: ["/assets/images/sera_pro_logo_hd.png"],
+  },
 };
 
 // Enable dynamic rendering to allow cookie access (Vercel supports this)
