@@ -1,3 +1,22 @@
+/**
+ * REMOVED: CV Import Step Component
+ * 
+ * This component has been temporarily disabled as part of removing the CV import feature.
+ * 
+ * To restore:
+ * 1. Uncomment all code below
+ * 2. Re-add the import step to the steps array in app/create-cv/page.tsx
+ * 3. Re-add the DataImportStep import and rendering in app/create-cv/page.tsx
+ * 4. Restore handleDataImport and handleSkipImport functions
+ * 5. Re-enable LinkedIn import API route and CV import API route
+ * 
+ * Original functionality:
+ * - Allows users to import CV data before manual entry
+ * - Supports LinkedIn JSON export and CV file upload (PDF, DOCX)
+ * - Pre-fills form data after successful import
+ */
+
+/*
 "use client";
 import { useState } from "react";
 import { useLocale } from "@/lib/locale-context";
@@ -388,4 +407,5 @@ export function DataImportStep({ onImport, onNext, onSkip }: DataImportStepProps
     </div>
   );
 }
+*/
 

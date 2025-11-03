@@ -1,3 +1,23 @@
+/**
+ * REMOVED: LinkedIn Data Parser
+ * 
+ * This library has been temporarily disabled as part of removing the CV import feature.
+ * 
+ * To restore:
+ * 1. Uncomment all code below
+ * 2. Re-enable the LinkedIn import API route (app/api/linkedin/import/route.ts)
+ * 3. Re-add LinkedIn import functionality to DataImportStep component
+ * 4. Re-add handleLinkedInImport function to app/create-cv/page.tsx
+ * 
+ * Original functionality:
+ * - Parses LinkedIn Data Export (JSON) format
+ * - Maps LinkedIn data to CV builder form format
+ * - Extracts personal info, experience, education, skills, languages, certifications
+ * 
+ * Reference: https://www.linkedin.com/help/linkedin/answer/a554590/download-your-linkedin-data
+ */
+
+/*
 // LinkedIn data parser for CV builder integration
 // Supports LinkedIn Data Export (JSON) format and extracts relevant CV information
 // Reference: https://www.linkedin.com/help/linkedin/answer/a554590/download-your-linkedin-data
@@ -240,4 +260,5 @@ export function mapLinkedInToCvData(
 
   return cvData;
 }
+*/
 

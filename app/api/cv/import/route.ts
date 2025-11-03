@@ -1,3 +1,21 @@
+/**
+ * REMOVED: CV File Import API Route
+ * 
+ * This API route has been temporarily disabled as part of removing the CV import feature.
+ * 
+ * To restore:
+ * 1. Uncomment all code below
+ * 2. Re-add CV file upload functionality to DataImportStep component
+ * 3. Implement actual file parsing logic (currently placeholder)
+ * 4. Re-add handleFileUpload or similar function to app/create-cv/page.tsx
+ * 
+ * Original functionality:
+ * - Handles CV file uploads (PDF, DOCX)
+ * - Extracts text and attempts to map to structured CV data
+ * - Currently placeholder - parsing logic not yet implemented
+ */
+
+/*
 import { NextRequest, NextResponse } from "next/server";
 
 /**
@@ -154,4 +172,5 @@ function parseCvText(text: string): any {
     certifications: [],
   };
 }
+*/
 

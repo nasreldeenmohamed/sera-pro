@@ -25,7 +25,8 @@ import { saveUserDraft, getUserDraft, getUserPlan, getUserDraftById, getFirstCvI
 // import { ClassicTemplate } from "@/components/pdf/Templates";
 // import { downloadPdf } from "@/lib/pdf";
 import { SiteLayout } from "@/components/layout/SiteLayout";
-import { CheckCircle2, XCircle, Clock, Loader2, Linkedin, Upload, ExternalLink, HelpCircle, Info, AlertCircle } from "lucide-react";
+import { CheckCircle2, XCircle, Clock, Loader2, ExternalLink, HelpCircle, Info, AlertCircle } from "lucide-react";
+// REMOVED: LinkedIn and Upload icons (import feature disabled)
 import {
   Tooltip,
   TooltipContent,
@@ -45,7 +46,8 @@ import {
 } from "@/lib/guest-drafts";
 import { StepIndicator } from "@/components/cv-builder/StepIndicator";
 import { TemplateSelector } from "@/components/cv-builder/TemplateSelector";
-import { DataImportStep } from "@/components/cv-builder/DataImportStep";
+// REMOVED: CV Import feature temporarily disabled
+// import { DataImportStep } from "@/components/cv-builder/DataImportStep";
 import { LiveCvPreview } from "@/components/cv-builder/LiveCvPreview";
 import { LanguageSelector } from "@/components/cv-builder/LanguageSelector";
 
@@ -239,10 +241,11 @@ function CreateCvPageContent() {
   const [pendingProtectedAction, setPendingProtectedAction] = useState<(() => void) | null>(null);
 
   // Step-based wizard state
-  // Steps: 1: Language, 2: Template, 3: Import, 4+: Form sections
+  // Steps: 1: Language, 2: Template, 3+: Form sections
+  // REMOVED: Step 3 (Import) - CV import feature temporarily disabled
   const [currentStep, setCurrentStep] = useState(1);
   const [selectedTemplate, setSelectedTemplate] = useState<string>(form.getValues("templateKey") || "classic");
-  const [dataImported, setDataImported] = useState(false);
+  // REMOVED: dataImported state (import feature disabled)
   
   // CV Language state (controls content language, not UI locale)
   const cvLanguage = form.watch("cvLanguage") || "en";
@@ -273,10 +276,10 @@ function CreateCvPageContent() {
   
   // Define steps for the wizard
   // Note: Step labels use site locale (isAr), but form content uses CV language (isCvAr)
+  // REMOVED: "import" step - CV import feature temporarily disabled
   const steps = useMemo(() => [
     { key: "language", label: { en: "Language", ar: "اللغة" } },
     { key: "template", label: { en: "Template", ar: "القالب" } },
-    { key: "import", label: { en: "Import", ar: "الاستيراد" } },
     { key: "personal", label: { en: "Personal", ar: "بيانات" } },
     { key: "experience", label: { en: "Experience", ar: "خبرات" } },
     { key: "projects", label: { en: "Projects", ar: "مشاريع" } },
@@ -495,9 +498,9 @@ function CreateCvPageContent() {
               }
             });
             setPresentStates(importedPresentStates);
-            // Set template and move to Personal Info step (step 4)
+            // Set template and move to Personal Info step (step 3, was step 4 before removing import)
             setSelectedTemplate(data.templateKey || "classic");
-            setCurrentStep(4);
+            setCurrentStep(3);
             hasLoadedDraft.current = true;
             setDraftExists(true); // Mark draft as existing for edit mode
           }
@@ -562,9 +565,9 @@ function CreateCvPageContent() {
               }
             });
             setPresentStates(presentStatesMap);
-            // Set template and move to Personal Info step (step 4)
+            // Set template and move to Personal Info step (step 3, was step 4 before removing import)
             setSelectedTemplate(draft.templateKey || "classic");
-            setCurrentStep(4); // Move to Personal Info step after loading draft
+            setCurrentStep(3); // Move to Personal Info step after loading draft
             hasLoadedDraft.current = true;
             setDraftStatus("success");
             setDraftMessage(t("Draft loaded successfully.", "تم تحميل المسودة بنجاح."));
@@ -595,9 +598,9 @@ function CreateCvPageContent() {
                 }
               });
               setPresentStates(guestPresentStates);
-              // Set template and move to Personal Info step (step 4)
+              // Set template and move to Personal Info step (step 3, was step 4 before removing import)
               setSelectedTemplate(guestDraft.templateKey || "classic");
-              setCurrentStep(4);
+              setCurrentStep(3);
               hasLoadedDraft.current = true;
               // Migrate guest draft to cloud
               // For limited plans, this will reuse first CV if it exists, otherwise create new
@@ -975,34 +978,8 @@ function CreateCvPageContent() {
     form.setValue("templateKey", templateKey);
   }
 
-  // Data import handler
-  function handleDataImport(importedData: any) {
-    // Merge imported data with existing form data
-    const existingData = form.getValues();
-    const mergedData = {
-      ...existingData,
-      ...importedData,
-      // Merge arrays instead of replacing
-      experience: [...(existingData.experience || []), ...(importedData.experience || [])],
-      projects: [...(existingData.projects || []), ...(importedData.projects || [])],
-      education: [...(existingData.education || []), ...(importedData.education || [])],
-      skills: [...(new Set([...(existingData.skills || []), ...(importedData.skills || [])]))],
-      languages: [...(new Set([...(existingData.languages || []), ...(importedData.languages || [])]))],
-      certifications: [...(new Set([...(existingData.certifications || []), ...(importedData.certifications || [])]))],
-    };
-    
-    form.reset(mergedData);
-    hasLoadedDraft.current = true;
-    setDataImported(true);
-    
-    // Show success message
-    setDraftStatus("success");
-    setDraftMessage(t("Data imported successfully! Please review and edit.", "تم استيراد البيانات بنجاح! يرجى المراجعة والتعديل."));
-    setTimeout(() => {
-      setDraftStatus("idle");
-      setDraftMessage(null);
-    }, 5000);
-  }
+  // REMOVED: Data import handler - CV import feature temporarily disabled
+  // function handleDataImport(importedData: any) { ... }
 
   // Navigation handlers
   function handleNextStep() {
@@ -1017,9 +994,8 @@ function CreateCvPageContent() {
     }
   }
 
-  function handleSkipImport() {
-    setCurrentStep(4); // Skip to Personal Info step
-  }
+  // REMOVED: handleSkipImport - CV import feature temporarily disabled
+  // function handleSkipImport() { setCurrentStep(3); }
 
   // Sync template selection with form
   useEffect(() => {
@@ -1029,13 +1005,13 @@ function CreateCvPageContent() {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
 
-  // LinkedIn import state
-  const [linkedInLoading, setLinkedInLoading] = useState(false);
-  const [linkedInError, setLinkedInError] = useState<string | null>(null);
-  const [linkedInSuccess, setLinkedInSuccess] = useState(false);
-  const [showLinkedInImport, setShowLinkedInImport] = useState(false);
-  const [linkedInUrl, setLinkedInUrl] = useState("");
-  const [linkedInInstructions, setLinkedInInstructions] = useState<string[]>([]);
+  // REMOVED: LinkedIn import state - CV import feature temporarily disabled
+  // const [linkedInLoading, setLinkedInLoading] = useState(false);
+  // const [linkedInError, setLinkedInError] = useState<string | null>(null);
+  // const [linkedInSuccess, setLinkedInSuccess] = useState(false);
+  // const [showLinkedInImport, setShowLinkedInImport] = useState(false);
+  // const [linkedInUrl, setLinkedInUrl] = useState("");
+  // const [linkedInInstructions, setLinkedInInstructions] = useState<string[]>([]);
 
   // Validation check before AI enhancement (premium feature - requires authentication)
   async function enhanceWithAI() {
@@ -1192,107 +1168,10 @@ function CreateCvPageContent() {
     router.push("/pricing");
   }
 
-  // LinkedIn import handler - supports JSON file upload (primary method)
-  async function handleLinkedInImport(file?: File, url?: string) {
-    if (!file && !url) return;
-
-    setLinkedInLoading(true);
-    setLinkedInError(null);
-    setLinkedInSuccess(false);
-    setLinkedInInstructions([]); // Clear instructions when starting new import
-
-    try {
-      const formData = new FormData();
-      if (file) {
-        formData.append("file", file);
-      }
-      if (url) {
-        formData.append("url", url);
-      }
-
-      const res = await fetch("/api/linkedin/import", {
-        method: "POST",
-        body: formData,
-      });
-
-      const json = await res.json();
-
-      if (!res.ok) {
-        // If URL import is not available, show helpful instructions instead of error
-        if (json.fallback && json.fallback.steps && Array.isArray(json.fallback.steps)) {
-          setLinkedInInstructions(json.fallback.steps);
-          setLinkedInError(t(
-            "Direct URL import is not available. Please use the JSON file upload method instead.",
-            "استيراد الرابط المباشر غير متاح. يرجى استخدام طريقة تحميل ملف JSON بدلاً من ذلك."
-          ));
-          setLinkedInLoading(false);
-          return; // Don't throw, just show instructions
-        }
-        throw new Error(json.error || t("Failed to import LinkedIn data.", "فشل استيراد بيانات LinkedIn."));
-      }
-
-      if (json.success && json.data) {
-        // Merge with existing form data (preserve any existing fields)
-        const existingData = form.getValues();
-        const mergedData = {
-          ...existingData,
-          ...json.data,
-          // Merge arrays instead of replacing
-          experience: [...(existingData.experience || []), ...(json.data.experience || [])],
-          education: [...(existingData.education || []), ...(json.data.education || [])],
-          skills: [...(new Set([...(existingData.skills || []), ...(json.data.skills || [])]))], // Remove duplicates
-          languages: [...(new Set([...(existingData.languages || []), ...(json.data.languages || [])]))],
-          certifications: [...(new Set([...(existingData.certifications || []), ...(json.data.certifications || [])]))],
-        };
-
-        form.reset(mergedData);
-        hasLoadedDraft.current = true;
-        setLinkedInSuccess(true);
-        setShowLinkedInImport(false);
-        setLinkedInUrl("");
-        
-        // Show success message
-        setDraftStatus("success");
-        setDraftMessage(t("LinkedIn data imported successfully! Please review and edit as needed.", "تم استيراد بيانات LinkedIn بنجاح! يرجى المراجعة والتعديل حسب الحاجة."));
-        setTimeout(() => {
-          setDraftStatus("idle");
-          setDraftMessage(null);
-        }, 5000);
-      }
-    } catch (error: any) {
-      console.error("LinkedIn import error:", error);
-      setLinkedInError(error.message || t("Failed to import LinkedIn data.", "فشل استيراد بيانات LinkedIn."));
-    } finally {
-      setLinkedInLoading(false);
-    }
-  }
-
-  // Handle file upload
-  function handleFileUpload(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (file) {
-      // Clear previous errors and instructions
-      setLinkedInError(null);
-      setLinkedInInstructions([]);
-      
-      if (file.type !== "application/json" && !file.name.endsWith(".json")) {
-        setLinkedInError(t("Please upload a valid JSON file from LinkedIn Data Export.", "يرجى تحميل ملف JSON صالح من تصدير بيانات LinkedIn."));
-        return;
-      }
-      handleLinkedInImport(file);
-    }
-  }
-
-  // Clear LinkedIn import state when toggling section
-  function handleToggleLinkedInImport() {
-    setShowLinkedInImport(!showLinkedInImport);
-    if (!showLinkedInImport) {
-      // Clear state when opening
-      setLinkedInError(null);
-      setLinkedInInstructions([]);
-      setLinkedInSuccess(false);
-    }
-  }
+  // REMOVED: LinkedIn import handlers - CV import feature temporarily disabled
+  // async function handleLinkedInImport(file?: File, url?: string) { ... }
+  // function handleFileUpload(event: React.ChangeEvent<HTMLInputElement>) { ... }
+  // function handleToggleLinkedInImport() { ... }
 
   // Get current step key
   const currentStepKey = steps[currentStep - 1]?.key || "template";
@@ -1453,6 +1332,7 @@ function CreateCvPageContent() {
         )}
 
         {/* Help & Support Section - only show during form entry */}
+        {/* Updated: Now shows from step 3 (Personal Info), which was previously step 4 */}
         {currentStep >= 3 && (
           <div className="mb-6 rounded-lg border bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950 p-4">
             <div className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 ${isAr ? "sm:flex-row-reverse" : ""}`}>
@@ -1509,20 +1389,14 @@ function CreateCvPageContent() {
               />
             )}
 
-            {/* Step 3: Data Import */}
-            {currentStep === 3 && (
-              <DataImportStep
-                onImport={handleDataImport}
-                onNext={handleNextStep}
-                onSkip={handleSkipImport}
-              />
-            )}
-            {/* Steps 4+: Form Sections - Show one section at a time based on currentStep */}
-            {currentStep >= 4 && (
+            {/* REMOVED: Step 3 (Data Import) - CV import feature temporarily disabled */}
+            {/* Steps 3+: Form Sections - Show one section at a time based on currentStep */}
+            {/* Updated: Form sections now start at step 3 (Personal Info), previously step 4 */}
+            {currentStep >= 3 && (
               <TooltipProvider>
                 <Form {...form}>
-                  {/* Personal Info Section (Step 4) */}
-                  {currentStep === 4 && (() => {
+                  {/* Personal Info Section (Step 3, was Step 4 before removing import) */}
+                  {currentStep === 3 && (() => {
                     // Get CV language-specific labels for Personal Info section
                     // These labels use cvLanguage, not UI locale (isAr)
                     const personalLabels = getPersonalLabels(cvLanguage);
@@ -1533,18 +1407,7 @@ function CreateCvPageContent() {
                         {/* Section Header */}
                         <h3 className="text-xl font-semibold mb-4">{sectionHeaders.personal}</h3>
                         
-                        {/* Import success notification */}
-                        {dataImported && (
-                          <Alert className="mb-4 border-green-500 bg-green-50 dark:bg-green-950">
-                            <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
-                            <AlertDescription className="text-green-700 dark:text-green-300">
-                              {t(
-                                "Data imported successfully! Please review and edit the information below.",
-                                "تم استيراد البيانات بنجاح! يرجى مراجعة وتعديل المعلومات أدناه."
-                              )}
-                            </AlertDescription>
-                          </Alert>
-                        )}
+                        {/* REMOVED: Import success notification - CV import feature disabled */}
                         {/* Personal Info Form Fields */}
                         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                           <FormField name="fullName" control={form.control} render={({ field }) => {
@@ -1680,8 +1543,8 @@ function CreateCvPageContent() {
                     );
                   })()}
 
-                  {/* Experience Section (Step 5) */}
-                  {currentStep === 5 && (() => {
+                  {/* Experience Section (Step 4, was Step 5 before removing import) */}
+                  {currentStep === 4 && (() => {
                     // Get CV language-specific labels for Experience section
                     const expLabels = getExperienceLabels(cvLanguage);
                     const sectionHeaders = getSectionHeaders(cvLanguage);
@@ -1869,8 +1732,8 @@ function CreateCvPageContent() {
                   );
                   })()}
 
-                  {/* Projects Section (Step 6) */}
-                  {currentStep === 6 && (() => {
+                  {/* Projects Section (Step 5, was Step 6 before removing import) */}
+                  {currentStep === 5 && (() => {
                     // Get CV language-specific labels for Projects section
                     const projLabels = getProjectsLabels(cvLanguage);
                     const sectionHeaders = getSectionHeaders(cvLanguage);
@@ -2053,7 +1916,8 @@ function CreateCvPageContent() {
                     - Use headers.xxx for section headers
                     - Use isCvAr instead of isAr for tooltips and help text
                   */}
-                  {currentStep === 7 && (() => {
+                  {/* Education Section (Step 6, was Step 7 before removing import) */}
+                  {currentStep === 6 && (() => {
                     const eduLabels = getEducationLabels(cvLanguage);
                     const sectionHeaders = getSectionHeaders(cvLanguage);
                     return (
@@ -2117,8 +1981,8 @@ function CreateCvPageContent() {
                     );
                   })()}
 
-                  {/* Skills Section (Step 8) */}
-                  {currentStep === 8 && (() => {
+                  {/* Skills Section (Step 7, was Step 8 before removing import) */}
+                  {currentStep === 7 && (() => {
                     const skillsLabels = getSkillsLabels(cvLanguage);
                     const sectionHeaders = getSectionHeaders(cvLanguage);
                     return (
@@ -2154,7 +2018,7 @@ function CreateCvPageContent() {
                     );
                   })()}
 
-                  {/* Languages Section (Step 8) */}
+                  {/* Languages Section (Step 8, was Step 9 before removing import) */}
                   {currentStep === 8 && (() => {
                     const langLabels = getLanguagesLabels(cvLanguage);
                     const sectionHeaders = getSectionHeaders(cvLanguage);
@@ -2183,8 +2047,8 @@ function CreateCvPageContent() {
                     );
                   })()}
 
-                  {/* Certifications Section (Step 9) */}
-                  {currentStep === 10 && (() => {
+                  {/* Certifications Section (Step 9, was Step 10 before removing import) */}
+                  {currentStep === 9 && (() => {
                     const certLabels = getCertificationsLabels(cvLanguage);
                     const sectionHeaders = getSectionHeaders(cvLanguage);
                     return (
@@ -2371,6 +2235,7 @@ function CreateCvPageContent() {
           </div>
 
           {/* Right Column: Live Preview (always show on desktop, show on mobile from step 3+) */}
+          {/* Updated: Preview shows from step 3 (Personal Info), previously step 4 */}
           <div className={`${currentStep < 3 ? "hidden lg:block" : ""} lg:sticky lg:top-4 lg:self-start`}>
             <LiveCvPreview 
               data={cvPreviewData}

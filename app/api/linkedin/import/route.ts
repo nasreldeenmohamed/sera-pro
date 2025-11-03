@@ -1,3 +1,21 @@
+/**
+ * REMOVED: LinkedIn Import API Route
+ * 
+ * This API route has been temporarily disabled as part of removing the CV import feature.
+ * 
+ * To restore:
+ * 1. Uncomment all code below
+ * 2. Re-enable the LinkedIn parser library (lib/linkedin/parser.ts)
+ * 3. Re-add LinkedIn import functionality to DataImportStep component
+ * 4. Re-add handleLinkedInImport function to app/create-cv/page.tsx
+ * 
+ * Original functionality:
+ * - Handles LinkedIn data import via JSON file upload (LinkedIn Data Export)
+ * - Attempts URL parsing (often blocked by LinkedIn)
+ * - Maps LinkedIn data to CV format
+ */
+
+/*
 import { NextRequest, NextResponse } from "next/server";
 import { parseLinkedInExport, mapLinkedInToCvData } from "@/lib/linkedin/parser";
 
@@ -95,4 +113,5 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+*/
 

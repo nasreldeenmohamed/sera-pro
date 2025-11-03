@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
+import Script from "next/script";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
@@ -59,6 +60,30 @@ export default async function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        {/* Google Analytics (GA4) - Sera Pro
+          * Tracking ID: G-CH35BN07M5
+          * Location: app/layout.tsx (root layout)
+          * 
+          * This script tracks pageviews and user engagement across all pages.
+          * For Next.js App Router, we use Script component with 'afterInteractive' strategy
+          * for optimal performance (loads after page becomes interactive).
+          * 
+          * To verify: Check Google Analytics dashboard for real-time data.
+          * Real-time reports: https://analytics.google.com/ → Realtime
+          */}
+        <Script
+          src="https://www.googletagmanager.com/gtag/js?id=G-CH35BN07M5"
+          strategy="afterInteractive"
+        />
+        <Script id="google-analytics" strategy="afterInteractive">
+          {`
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', 'G-CH35BN07M5');
+          `}
+        </Script>
+        
         <LocaleProvider initialLocale={locale}>
           <AuthProvider>{children}</AuthProvider>
         </LocaleProvider>
