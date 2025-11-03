@@ -23,7 +23,11 @@ ANTHROPIC (1 variable):
 -----------------------
 ANTHROPIC_API_KEY
 
-TOTAL: 11 environment variables
+GOOGLE ANALYTICS (1 variable):
+-------------------------------
+NEXT_PUBLIC_GA_TRACKING_ID
+
+TOTAL: 12 environment variables
 
 HOW TO ADD:
 -----------

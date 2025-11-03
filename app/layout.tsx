@@ -55,32 +55,34 @@ export default async function RootLayout({
   }
   // Set direction based on locale: Arabic = RTL, English = LTR
   const dir = locale === "ar" ? "rtl" : "ltr";
+  
+  // Get Google Analytics tracking ID from environment variables
+  // Falls back to default if env var not set (for immediate detection)
+  const gaTrackingId = process.env.NEXT_PUBLIC_GA_TRACKING_ID || "G-CH35BN07M5";
+  
   return (
     <html lang={locale} dir={dir}>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         {/* Google Analytics (GA4) - Sera Pro
-          * Tracking ID: G-CH35BN07M5
-          * Location: app/layout.tsx (root layout)
+          * Tracking ID: Configured via NEXT_PUBLIC_GA_TRACKING_ID environment variable
+          * Falls back to G-CH35BN07M5 if env var not set
           * 
-          * This script tracks pageviews and user engagement across all pages.
-          * For Next.js App Router, we use Script component with 'afterInteractive' strategy
-          * for optimal performance (loads after page becomes interactive).
-          * 
-          * To verify: Check Google Analytics dashboard for real-time data.
-          * Real-time reports: https://analytics.google.com/ → Realtime
+          * Using 'beforeInteractive' strategy ensures scripts are injected into <head>
+          * before the page becomes interactive, which is required for GA4 detection.
+          * This is the recommended approach for analytics scripts in Next.js App Router.
           */}
         <Script
-          src="https://www.googletagmanager.com/gtag/js?id=G-CH35BN07M5"
-          strategy="afterInteractive"
+          src={`https://www.googletagmanager.com/gtag/js?id=${gaTrackingId}`}
+          strategy="beforeInteractive"
         />
-        <Script id="google-analytics" strategy="afterInteractive">
+        <Script id="google-analytics" strategy="beforeInteractive">
           {`
             window.dataLayer = window.dataLayer || [];
             function gtag(){dataLayer.push(arguments);}
             gtag('js', new Date());
-            gtag('config', 'G-CH35BN07M5');
+            gtag('config', '${gaTrackingId}');
           `}
         </Script>
         

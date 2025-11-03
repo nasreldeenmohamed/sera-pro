@@ -48,6 +48,19 @@ ANTHROPIC_API_KEY=sk-ant-your-api-key-here
 
 ---
 
+### Google Analytics (GA4)
+
+```
+NEXT_PUBLIC_GA_TRACKING_ID=G-CH35BN07M5
+```
+
+**Where to find:**
+- Google Analytics Dashboard: https://analytics.google.com/
+- Admin → Property Settings → Property ID
+- Format: G-XXXXXXXXXX
+
+---
+
 ## How to Add to Vercel
 
 1. Go to your Vercel project dashboard

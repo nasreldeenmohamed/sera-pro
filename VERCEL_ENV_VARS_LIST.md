@@ -44,7 +44,17 @@ ANTHROPIC_API_KEY=
 
 ---
 
-## Total: 11 Environment Variables
+## 4. Google Analytics (GA4) (1 variable)
+
+```
+NEXT_PUBLIC_GA_TRACKING_ID=
+```
+
+**Source:** Google Analytics Dashboard → Admin → Property Settings → Property ID
+
+---
+
+## Total: 12 Environment Variables
 
 ---
 

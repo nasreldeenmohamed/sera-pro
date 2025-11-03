@@ -16,6 +16,9 @@ KASHIER_MODE=test
 # Anthropic (Claude)
 ANTHROPIC_API_KEY=
 
+# Google Analytics (GA4)
+NEXT_PUBLIC_GA_TRACKING_ID=G-CH35BN07M5
+
 # QA/Testing Mode (Development Only - ⚠️ DO NOT ENABLE IN PRODUCTION)
 # Set to "true" to bypass payment gateway and directly activate plans for testing
 # NEXT_PUBLIC_ENABLE_QA_PAYMENT_BYPASS=true
