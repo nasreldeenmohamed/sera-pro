@@ -1,7 +1,7 @@
 ENVIRONMENT VARIABLES FOR VERCEL
 ================================
 
-Copy these 11 variables and their VALUES from your .env.local file:
+Copy these 13 variables and their VALUES from your .env.local file:
 
 FIREBASE (7 variables):
 -----------------------
@@ -27,7 +27,11 @@ GOOGLE ANALYTICS (1 variable):
 -------------------------------
 NEXT_PUBLIC_GA_TRACKING_ID
 
-TOTAL: 12 environment variables
+META PIXEL (1 variable):
+-------------------------
+NEXT_PUBLIC_META_PIXEL_ID
+
+TOTAL: 13 environment variables
 
 HOW TO ADD:
 -----------

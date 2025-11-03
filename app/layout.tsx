@@ -99,11 +99,50 @@ export default async function RootLayout({
   // Falls back to default if env var not set (for immediate detection)
   const gaTrackingId = process.env.NEXT_PUBLIC_GA_TRACKING_ID || "G-CH35BN07M5";
   
+  // Get Meta Pixel ID from environment variables
+  // Falls back to default if env var not set
+  const metaPixelId = process.env.NEXT_PUBLIC_META_PIXEL_ID || "847265357880267";
+  
   return (
     <html lang={locale} dir={dir}>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        {/* Meta Pixel (Facebook Pixel) - Sera Pro
+          * Pixel ID: Configured via NEXT_PUBLIC_META_PIXEL_ID environment variable
+          * Falls back to 847265357880267 if env var not set
+          * 
+          * Using 'afterInteractive' strategy for optimal performance.
+          * Meta Pixel loads after page becomes interactive, which is sufficient
+          * for tracking and won't block page rendering.
+          * Next.js will inject this script appropriately in the document.
+          * 
+          * The noscript fallback ensures tracking works even without JavaScript.
+          */}
+        <Script id="meta-pixel" strategy="afterInteractive">
+          {`
+            !function(f,b,e,v,n,t,s)
+            {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+            n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+            if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+            n.queue=[];t=b.createElement(e);t.async=!0;
+            t.src=v;s=b.getElementsByTagName(e)[0];
+            s.parentNode.insertBefore(t,s)}(window, document,'script',
+            'https://connect.facebook.net/en_US/fbevents.js');
+            fbq('init', '${metaPixelId}');
+            fbq('track', 'PageView');
+          `}
+        </Script>
+        <noscript>
+          <img
+            height="1"
+            width="1"
+            style={{ display: "none" }}
+            src={`https://www.facebook.com/tr?id=${metaPixelId}&ev=PageView&noscript=1`}
+            alt=""
+          />
+        </noscript>
+        
         {/* Google Analytics (GA4) - Sera Pro
           * Tracking ID: Configured via NEXT_PUBLIC_GA_TRACKING_ID environment variable
           * Falls back to G-CH35BN07M5 if env var not set

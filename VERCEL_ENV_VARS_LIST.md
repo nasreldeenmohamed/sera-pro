@@ -54,7 +54,17 @@ NEXT_PUBLIC_GA_TRACKING_ID=
 
 ---
 
-## Total: 12 Environment Variables
+## 5. Meta Pixel (Facebook Pixel) (1 variable)
+
+```
+NEXT_PUBLIC_META_PIXEL_ID=
+```
+
+**Source:** Meta Events Manager → Select Pixel → Settings → Pixel ID
+
+---
+
+## Total: 13 Environment Variables
 
 ---
 

@@ -61,6 +61,19 @@ NEXT_PUBLIC_GA_TRACKING_ID=G-CH35BN07M5
 
 ---
 
+### Meta Pixel (Facebook Pixel)
+
+```
+NEXT_PUBLIC_META_PIXEL_ID=847265357880267
+```
+
+**Where to find:**
+- Meta Events Manager: https://business.facebook.com/events_manager/
+- Select your Pixel → Settings → Pixel ID
+- Format: 15-digit number (e.g., 847265357880267)
+
+---
+
 ## How to Add to Vercel
 
 1. Go to your Vercel project dashboard
