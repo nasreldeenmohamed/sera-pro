@@ -337,7 +337,11 @@ export function KashierPaymentModal({
                   size="lg"
                   onClick={() => {
                     if (checkoutUrl) {
-                      // Open in same window for better flow and HTTPS security
+                      // Step 1: Transaction has already been created in Firestore (status: "pending")
+                      // Step 2: Payment URL has been generated using secure environment variables
+                      // Step 3: Redirect user to Kashier's secure payment page
+                      // This is a full-page redirect to ensure proper HTTPS security
+                      // After payment completion, Kashier will redirect back to our success/cancel URLs
                       window.location.href = checkoutUrl;
                     }
                   }}

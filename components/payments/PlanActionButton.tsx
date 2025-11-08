@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { useLocale } from "@/lib/locale-context";
@@ -43,13 +44,17 @@ type PlanActionButtonProps = {
 /**
  * QA/Testing Mode: Bypass Payment
  * 
- * Set NEXT_PUBLIC_ENABLE_QA_PAYMENT_BYPASS=true in .env.local to enable payment bypass for QA/testing.
- * When enabled, clicking purchase buttons will directly update the subscription in Firestore
- * without going through payment gateway.
+ * DISABLED: This bypass feature has been disabled in favor of user-based payment key selection.
+ * The payment system now uses different API keys based on the authenticated user:
+ * - Test user (JgGmhphtIsVyGO2nTnQde9ZOaKD2): Uses test/sandbox keys
+ * - All other users: Uses production/live keys
  * 
- * ⚠️ IMPORTANT: Remove or disable this before production deployment!
+ * If you need to restore this bypass feature, uncomment the code below and set:
+ * NEXT_PUBLIC_ENABLE_QA_PAYMENT_BYPASS=true in .env.local
+ * 
+ * ⚠️ IMPORTANT: This bypass should NOT be enabled in production!
  */
-const ENABLE_QA_PAYMENT_BYPASS = process.env.NEXT_PUBLIC_ENABLE_QA_PAYMENT_BYPASS === "true";
+// const ENABLE_QA_PAYMENT_BYPASS = process.env.NEXT_PUBLIC_ENABLE_QA_PAYMENT_BYPASS === "true";
 
 export function PlanActionButton({
   product,
@@ -61,6 +66,8 @@ export function PlanActionButton({
   const { user } = useAuth();
   const { t } = useLocale();
   const router = useRouter();
+  const [loading, setLoading] = useState(false);
+  const [redirecting, setRedirecting] = useState(false);
 
   /**
    * Handle plan action click
@@ -69,7 +76,7 @@ export function PlanActionButton({
    * 1. Free plan: Navigate to CV builder (no auth required)
    * 2. Paid plans: Check authentication
    *    - If not logged in: Redirect to auth page with return URL
-   *    - If logged in: Proceed with purchase (QA bypass or payment checkout)
+   *    - If logged in: Create transaction, get payment URL, then redirect to Kashier
    */
   const handleAction = async () => {
     // Free plan: Navigate to CV builder directly (no authentication required)
@@ -87,31 +94,62 @@ export function PlanActionButton({
     }
 
     // User is authenticated, proceed with purchase flow
+    setLoading(true);
     
-    // QA/TESTING MODE: Bypass payment and directly activate plan
-    if (ENABLE_QA_PAYMENT_BYPASS) {
-      try {
-        console.warn("[QA MODE] Payment bypass enabled - directly activating plan:", product);
-        await setUserPlanFromProduct(user.uid, product);
-        console.log("[QA MODE] Plan activated successfully:", product);
-        
-        // Refresh to show updated plan
-        router.refresh();
-        
-        // Show success message
-        alert(t(
-          `QA Mode: ${product} plan activated successfully!`,
-          `وضع QA: تم تفعيل خطة ${product} بنجاح!`
-        ));
-      } catch (error: any) {
-        console.error("[QA MODE] Failed to activate plan:", error);
-        alert(t("Failed to activate plan. Please try again.", "فشل تفعيل الخطة. يرجى المحاولة مرة أخرى."));
-      }
-      return;
-    }
+    try {
+      // Step 1: Call checkout API to create pending transaction and get payment URL
+      // The API endpoint:
+      // - Creates a pending Transaction record in Firestore
+      // - Generates Kashier payment URL using secure environment variables
+      // - Returns both the payment URL and transactionId
+      const checkoutResponse = await fetch(
+        `/api/payments/kashier/checkout?product=${encodeURIComponent(product)}&userId=${encodeURIComponent(user.uid)}`
+      );
 
-    // PRODUCTION MODE: Redirect to payment checkout
-    router.push(`/api/payments/kashier/checkout?product=${product}&userId=${user.uid}`);
+      if (!checkoutResponse.ok) {
+        const error = await checkoutResponse.json().catch(() => ({}));
+        
+        // Handle service unavailable (payment not configured)
+        if (checkoutResponse.status === 503 || error.code === "PAYMENT_NOT_CONFIGURED") {
+          alert(t(
+            "Payment service is temporarily unavailable. Please contact support.",
+            "خدمة الدفع غير متاحة مؤقتًا. يرجى التواصل مع الدعم."
+          ));
+          setLoading(false);
+          return;
+        }
+
+        throw new Error(
+          error.error || t("Failed to create checkout session. Please try again.", "فشل إنشاء جلسة الدفع. يرجى المحاولة مرة أخرى.")
+        );
+      }
+
+      const { url, transactionId } = await checkoutResponse.json();
+      
+      if (!url) {
+        throw new Error(t("Invalid payment response.", "استجابة دفع غير صالحة."));
+      }
+
+      // Step 2: Show redirecting message to user
+      // This provides feedback that the transaction was created and redirect is happening
+      setRedirecting(true);
+      
+      // Optional: Show a brief message before redirect (enhances UX)
+      // The message appears for a very short time before redirect happens
+      setTimeout(() => {
+        // Step 3: Redirect user to Kashier payment page
+        // This is a full-page redirect to Kashier's secure payment page
+        // The payment URL is generated server-side using secure environment variables
+        // After payment completion, Kashier will redirect back to our success/cancel URLs
+        window.location.href = url;
+      }, 500); // Small delay to show "Redirecting..." message
+      
+    } catch (error: any) {
+      console.error("[PlanActionButton] Payment checkout error:", error);
+      alert(error.message || t("Payment error. Please try again.", "خطأ في الدفع. يرجى المحاولة مرة أخرى."));
+      setLoading(false);
+      setRedirecting(false);
+    }
   };
 
   // Default button text based on product type
@@ -134,10 +172,20 @@ export function PlanActionButton({
     );
   }
 
-  // Paid plans: Use button with onClick handler for auth check
+  // Paid plans: Use button with onClick handler for auth check and payment redirect
   return (
-    <Button onClick={handleAction} className={className} style={style}>
-      {displayText}
+    <Button 
+      onClick={handleAction} 
+      className={className} 
+      style={style}
+      disabled={loading || redirecting}
+    >
+      {redirecting 
+        ? t("Redirecting to secure payment...", "جارٍ إعادة التوجيه إلى الدفع الآمن...")
+        : loading 
+        ? t("Processing...", "جارٍ المعالجة...")
+        : displayText
+      }
     </Button>
   );
 }

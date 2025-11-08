@@ -22,16 +22,67 @@ NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=G-XXXXXXXXXX
 
 ### Kashier Payment Gateway
 
+The payment system automatically selects test or production keys based on the authenticated user ID:
+- **Test user** (JgGmhphtIsVyGO2nTnQde9ZOaKD2): Uses test/sandbox keys
+- **All other users**: Uses production/live keys
+
+#### Production Keys (Required)
+
 ```
-KASHIER_MERCHANT_ID=your_merchant_id
-KASHIER_SECRET_KEY=your_secret_key
-KASHIER_MODE=test
+KASHIER_MERCHANT_ID=your_production_merchant_id
+KASHIER_SECRET_KEY=your_production_secret_key
+KASHIER_MODE=live
 ```
 
 **Where to find:** 
-- Kashier Dashboard → Settings → API Keys
-- For testing: Use test credentials from Kashier dashboard
-- For production: Use production credentials (after approval)
+- Kashier Dashboard → Settings → API Keys → Production Keys
+- Use production credentials for live transactions
+
+#### Test/Sandbox Keys (Required for Testing)
+
+```
+KASHIER_TEST_MERCHANT_ID=your_test_merchant_id
+KASHIER_TEST_SECRET_KEY=your_test_secret_key
+```
+
+**Where to find:**
+- Kashier Dashboard → Settings → API Keys → Test/Sandbox Keys
+- Use test credentials for sandbox testing (only used by test user account)
+
+**Note:** The test user ID is hardcoded in `payments/kashier.ts` as `TEST_USER_ID`. To change it, update the constant in that file.
+
+#### Payment Page Links (ppLink) - Required
+
+Payment Page Links are used to generate secure payment URLs. Each subscription plan has its own ppLink for both production and test modes.
+
+**Production Payment Page Links:**
+
+```
+KASHIER_PPLINK_ONETIME=PP-XXXXX
+KASHIER_PPLINK_FLEXPACK=PP-XXXXX
+KASHIER_PPLINK_ANNUALPASS=PP-XXXXX
+```
+
+**Test/Sandbox Payment Page Links:**
+
+```
+KASHIER_PPLINK_ONETIME_TEST=PP-XXXXX
+KASHIER_PPLINK_FLEXPACK_TEST=PP-XXXXX
+KASHIER_PPLINK_ANNUALPASS_TEST=PP-XXXXX
+```
+
+**Where to find:**
+- Kashier Dashboard → Payment Pages → Create/View Payment Pages
+- Each Payment Page has a unique ID (format: PP-XXXXX)
+- Create separate Payment Pages for each subscription plan (one_time, flex_pack, annual_pass)
+- Create separate test Payment Pages for each plan in sandbox/testing environment
+
+**Payment Page Link Mapping:**
+- `one_time` plan → Uses `KASHIER_PPLINK_ONETIME` (live) or `KASHIER_PPLINK_ONETIME_TEST` (test)
+- `flex_pack` plan → Uses `KASHIER_PPLINK_FLEXPACK` (live) or `KASHIER_PPLINK_FLEXPACK_TEST` (test)
+- `annual_pass` plan → Uses `KASHIER_PPLINK_ANNUALPASS` (live) or `KASHIER_PPLINK_ANNUALPASS_TEST` (test)
+
+**Security Note:** These values are stored as environment variables and never exposed to the client/browser. Payment URLs are generated server-side only.
 
 ---
 

@@ -22,12 +22,21 @@ NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=
 
 ---
 
-## 2. Kashier Payment Gateway (3 variables)
+## 2. Kashier Payment Gateway (5 variables)
 
+The system automatically uses test keys for test user (JgGmhphtIsVyGO2nTnQde9ZOaKD2) and production keys for all other users.
+
+### Production Keys (Required)
 ```
 KASHIER_MERCHANT_ID=
 KASHIER_SECRET_KEY=
-KASHIER_MODE=test
+KASHIER_MODE=live
+```
+
+### Test/Sandbox Keys (Required for Testing)
+```
+KASHIER_TEST_MERCHANT_ID=
+KASHIER_TEST_SECRET_KEY=
 ```
 
 **Source:** Kashier Dashboard → Settings → API Keys
@@ -64,7 +73,7 @@ NEXT_PUBLIC_META_PIXEL_ID=
 
 ---
 
-## Total: 13 Environment Variables
+## Total: 15 Environment Variables
 
 ---
 

@@ -11,13 +11,17 @@ type Product = "one_time" | "flex_pack" | "annual_pass";
 /**
  * QA/Testing Mode: Bypass Payment
  * 
- * Set ENABLE_QA_PAYMENT_BYPASS=true in .env.local to enable payment bypass for QA/testing.
- * When enabled, clicking "Subscribe" will directly update the subscription in Firestore
- * without going through payment gateway.
+ * DISABLED: This bypass feature has been disabled in favor of user-based payment key selection.
+ * The payment system now uses different API keys based on the authenticated user:
+ * - Test user (JgGmhphtIsVyGO2nTnQde9ZOaKD2): Uses test/sandbox keys
+ * - All other users: Uses production/live keys
  * 
- * ⚠️ IMPORTANT: Remove or disable this before production deployment!
+ * If you need to restore this bypass feature, uncomment the code below and set:
+ * NEXT_PUBLIC_ENABLE_QA_PAYMENT_BYPASS=true in .env.local
+ * 
+ * ⚠️ IMPORTANT: This bypass should NOT be enabled in production!
  */
-const ENABLE_QA_PAYMENT_BYPASS = process.env.NEXT_PUBLIC_ENABLE_QA_PAYMENT_BYPASS === "true";
+// const ENABLE_QA_PAYMENT_BYPASS = process.env.NEXT_PUBLIC_ENABLE_QA_PAYMENT_BYPASS === "true";
 
 export function PurchaseButton({ product }: { product: Product }) {
   const { user } = useAuth();
@@ -37,6 +41,10 @@ export function PurchaseButton({ product }: { product: Product }) {
       }
 
       // QA/TESTING MODE: Bypass payment and directly activate plan
+      // DISABLED: Payment bypass removed. All users now go through payment gateway.
+      // Test user (JgGmhphtIsVyGO2nTnQde9ZOaKD2) uses test/sandbox keys automatically.
+      // To restore bypass functionality, uncomment the code below and enable ENABLE_QA_PAYMENT_BYPASS.
+      /*
       if (ENABLE_QA_PAYMENT_BYPASS) {
         console.warn("[QA MODE] Payment bypass enabled - directly activating plan:", product);
         try {
@@ -60,18 +68,48 @@ export function PurchaseButton({ product }: { product: Product }) {
         }
         return;
       }
+      */
 
       // PRODUCTION MODE: Normal payment flow through Kashier
-      // Request Kashier checkout URL with product and userId
+      // Payment keys are automatically selected based on user ID:
+      // - Test user: Uses test/sandbox keys
+      // - All other users: Uses production/live keys
+      
+      // Step 1: Request checkout URL from API
+      // The API endpoint will:
+      // - Create a pending Transaction record in Firestore
+      // - Generate Kashier payment URL using secure environment variables (ppLink)
+      // - Return both the payment URL and transactionId
       const planName = product === "one_time" ? "one_time" : product === "flex_pack" ? "flex_pack" : "annual_pass";
       const checkoutUrl = `/api/payments/kashier/checkout?product=${encodeURIComponent(planName)}&userId=${encodeURIComponent(user.uid)}`;
+      
       const res = await fetch(checkoutUrl);
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
-        throw new Error(json?.error || "Failed to create checkout session");
+        
+        // Handle service unavailable (payment not configured)
+        if (res.status === 503 || json.code === "PAYMENT_NOT_CONFIGURED") {
+          throw new Error(
+            t(
+              "Payment service is temporarily unavailable. Please contact support.",
+              "خدمة الدفع غير متاحة مؤقتًا. يرجى التواصل مع الدعم."
+            )
+          );
+        }
+        
+        throw new Error(json?.error || t("Failed to create checkout session", "فشل إنشاء جلسة الدفع"));
       }
+      
       const json = await res.json();
-      if (!json.url) throw new Error("Invalid checkout response");
+      if (!json.url) {
+        throw new Error(t("Invalid checkout response", "استجابة دفع غير صالحة"));
+      }
+
+      // Step 2: Redirect user to Kashier payment page
+      // This is a full-page redirect to Kashier's secure payment page
+      // The payment URL is generated server-side using secure environment variables
+      // After payment completion, Kashier will redirect back to our success/cancel URLs
+      // Note: The transaction has already been created in Firestore with status "pending"
       window.location.href = json.url;
     } catch (e: any) {
       setError(e?.message || t("Payment error", "خطأ في الدفع"));
@@ -83,10 +121,14 @@ export function PurchaseButton({ product }: { product: Product }) {
   return (
     <div className="space-y-1">
       <Button disabled={loading || !user} onClick={startCheckout} className="w-full">
-        {loading ? t("Processing...", "جارٍ المعالجة...") :
-          product === "one_time" ? t("Buy Single CV", "شراء سيرة") :
-          product === "flex_pack" ? t("Buy Flex Pack", "شراء باقة مرنة") :
-          t("Buy Annual Pass", "شراء البطاقة السنوية")}
+        {loading 
+          ? t("Redirecting to secure payment...", "جارٍ إعادة التوجيه إلى الدفع الآمن...")
+          : product === "one_time" 
+          ? t("Buy Single CV", "شراء سيرة") 
+          : product === "flex_pack" 
+          ? t("Buy Flex Pack", "شراء باقة مرنة") 
+          : t("Buy Annual Pass", "شراء البطاقة السنوية")
+        }
       </Button>
       {error ? <p className="text-xs text-red-600">{error}</p> : null}
       {!user ? <p className="text-xs text-zinc-500">{t("Sign in to purchase.", "سجل الدخول لإتمام الشراء.")}</p> : null}

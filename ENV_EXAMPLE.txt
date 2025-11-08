@@ -8,10 +8,37 @@ NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
 NEXT_PUBLIC_FIREBASE_APP_ID=
 NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=
 
-# Kashier
+# Kashier Payment Gateway
+# Production Keys (used for all users except test user)
 KASHIER_MERCHANT_ID=
 KASHIER_SECRET_KEY=
-KASHIER_MODE=test
+KASHIER_MODE=live
+
+# Test/Sandbox Keys (used only for test user: JgGmhphtIsVyGO2nTnQde9ZOaKD2)
+KASHIER_TEST_MERCHANT_ID=
+KASHIER_TEST_SECRET_KEY=
+
+# Kashier Payment Page Links (ppLink) - Security: Never hardcode these values
+# Get these from your Kashier dashboard: Payment Pages section
+# Format: PP-XXXXX (e.g., PP-1234567890)
+#
+# Production Payment Page Links (one per subscription plan)
+KASHIER_PPLINK_ONETIME=PP-XXXXX
+KASHIER_PPLINK_FLEXPACK=PP-XXXXX
+KASHIER_PPLINK_ANNUALPASS=PP-XXXXX
+#
+# Test/Sandbox Payment Page Links (one per subscription plan in test mode)
+# Used when userId matches test user: JgGmhphtIsVyGO2nTnQde9ZOaKD2
+KASHIER_PPLINK_ONETIME_TEST=PP-XXXXX
+KASHIER_PPLINK_FLEXPACK_TEST=PP-XXXXX
+KASHIER_PPLINK_ANNUALPASS_TEST=PP-XXXXX
+#
+# Payment Page Link Mapping:
+# - one_time plan → KASHIER_PPLINK_ONETIME (in live mode) or KASHIER_PPLINK_ONETIME_TEST (in test mode)
+# - flex_pack plan → KASHIER_PPLINK_FLEXPACK (in live mode) or KASHIER_PPLINK_FLEXPACK_TEST (in test mode)
+# - annual_pass plan → KASHIER_PPLINK_ANNUALPASS (in live mode) or KASHIER_PPLINK_ANNUALPASS_TEST (in test mode)
+#
+# Note: These values are used server-side only and never exposed to the client/browser.
 
 # Anthropic (Claude)
 ANTHROPIC_API_KEY=
