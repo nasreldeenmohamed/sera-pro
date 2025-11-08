@@ -140,13 +140,16 @@ export async function createKashierCheckout(input: CreateCheckoutInput) {
     );
   }
 
+  // Ensure mode is "test" or "live" for type safety
+  const paymentMode: "test" | "live" = mode === "test" ? "test" : "live";
+
   // Get the appropriate Payment Page Link based on plan and mode
-  const ppLink = getPaymentPageLink(input.subscriptionPlanId, mode);
+  const ppLink = getPaymentPageLink(input.subscriptionPlanId, paymentMode);
 
   // Build Kashier Payment Page URL
   // Format: https://checkouts.kashier.io/en/paymentpage?ppLink={ppLink},{mode}
   // The ppLink and mode are combined in the ppLink parameter: "PP-XXXXX,test" or "PP-XXXXX,live"
-  const paymentUrl = `https://checkouts.kashier.io/en/paymentpage?ppLink=${ppLink},${mode}`;
+  const paymentUrl = `https://checkouts.kashier.io/en/paymentpage?ppLink=${ppLink},${paymentMode}`;
 
   // Note: Additional parameters (orderId, successUrl, cancelUrl, etc.) may need to be
   // configured in the Kashier dashboard for the Payment Page Link, or passed via

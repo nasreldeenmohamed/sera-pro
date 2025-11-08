@@ -1,0 +1,138 @@
+================================================================================
+NEW ENVIRONMENT VARIABLES FOR VERCEL - PAYMENT INTEGRATION
+================================================================================
+
+The following environment variables are NEW and need to be added to your Vercel project
+for the Kashier payment integration to work properly.
+
+================================================================================
+KASHIER PAYMENT PAGE LINKS (ppLink) - 6 NEW VARIABLES
+================================================================================
+
+These are the NEW variables that were added for the payment integration.
+Each subscription plan requires a separate Payment Page Link for both
+production and test modes.
+
+PRODUCTION PAYMENT PAGE LINKS (3 variables):
+---------------------------------------------
+KASHIER_PPLINK_ONETIME=PP-XXXXX
+KASHIER_PPLINK_FLEXPACK=PP-XXXXX
+KASHIER_PPLINK_ANNUALPASS=PP-XXXXX
+
+TEST/SANDBOX PAYMENT PAGE LINKS (3 variables):
+-----------------------------------------------
+KASHIER_PPLINK_ONETIME_TEST=PP-XXXXX
+KASHIER_PPLINK_FLEXPACK_TEST=PP-XXXXX
+KASHIER_PPLINK_ANNUALPASS_TEST=PP-XXXXX
+
+================================================================================
+WHERE TO FIND THESE VALUES
+================================================================================
+
+1. Log in to your Kashier Dashboard
+2. Navigate to: Payment Pages → Create/View Payment Pages
+3. Create a Payment Page for each subscription plan:
+   - One-Time Purchase plan
+   - Flex Pack plan
+   - Annual Pass plan
+4. Create SEPARATE Payment Pages for TEST mode (same plans, but in sandbox)
+5. Each Payment Page will have a unique ID in the format: PP-XXXXX
+6. Copy the Payment Page ID for each plan
+
+IMPORTANT NOTES:
+- You need 6 Payment Pages total (3 for production, 3 for test)
+- Each Payment Page ID is unique
+- Format is always: PP- followed by alphanumeric characters
+- Production and test Payment Pages are separate
+
+================================================================================
+HOW TO ADD TO VERCEL
+================================================================================
+
+Step 1: Go to Vercel Dashboard
+  - Navigate to your project
+  - Click "Settings" → "Environment Variables"
+
+Step 2: Add Each Variable
+  For each of the 6 variables above:
+  1. Click "Add New"
+  2. Key: Enter the variable name (e.g., KASHIER_PPLINK_ONETIME)
+  3. Value: Enter the Payment Page ID from Kashier (e.g., PP-1234567890)
+  4. Environment: Select ALL (Production, Preview, Development)
+  5. Click "Save"
+
+Step 3: Verify All Variables
+  - Confirm all 6 variables are listed
+  - Check that values are correct (format: PP-XXXXX)
+  - Ensure all environments are selected
+
+Step 4: Redeploy
+  - After adding all variables, redeploy your project
+  - Changes take effect after redeployment
+
+================================================================================
+COMPLETE LIST OF ALL NEW VARIABLES
+================================================================================
+
+Copy and paste this list when adding to Vercel:
+
+1. KASHIER_PPLINK_ONETIME=PP-XXXXX
+2. KASHIER_PPLINK_FLEXPACK=PP-XXXXX
+3. KASHIER_PPLINK_ANNUALPASS=PP-XXXXX
+4. KASHIER_PPLINK_ONETIME_TEST=PP-XXXXX
+5. KASHIER_PPLINK_FLEXPACK_TEST=PP-XXXXX
+6. KASHIER_PPLINK_ANNUALPASS_TEST=PP-XXXXX
+
+================================================================================
+EXISTING VARIABLES (Already in Vercel - No Action Needed)
+================================================================================
+
+These variables should already exist in your Vercel project. If they don't,
+add them as well:
+
+KASHIER_MERCHANT_ID
+KASHIER_SECRET_KEY
+KASHIER_MODE=live
+KASHIER_TEST_MERCHANT_ID
+KASHIER_TEST_SECRET_KEY
+
+================================================================================
+VERIFICATION CHECKLIST
+================================================================================
+
+After adding the variables, verify:
+
+[ ] All 6 Payment Page Link variables are added
+[ ] Each variable has a value in format PP-XXXXX
+[ ] Production variables use production Payment Page IDs
+[ ] Test variables use test/sandbox Payment Page IDs
+[ ] All environments (Production, Preview, Development) are selected
+[ ] Project has been redeployed after adding variables
+[ ] Payment flow works correctly in test mode
+[ ] Payment flow works correctly in production mode
+
+================================================================================
+TROUBLESHOOTING
+================================================================================
+
+If payment URLs are not generating correctly:
+
+1. Check that all 6 variables are set in Vercel
+2. Verify Payment Page IDs are correct (format: PP-XXXXX)
+3. Ensure variables are available in all environments
+4. Check that KASHIER_MODE is set correctly (live or test)
+5. Verify Payment Pages exist in Kashier dashboard
+6. Check server logs for errors about missing variables
+
+================================================================================
+SECURITY NOTES
+================================================================================
+
+- These values are server-side only (never exposed to client)
+- Payment URLs are generated server-side in API routes
+- Keep Payment Page IDs secure
+- Use different Payment Pages for test and production
+- Rotate Payment Pages if compromised
+
+================================================================================
+

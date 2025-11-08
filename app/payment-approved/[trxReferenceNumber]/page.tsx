@@ -327,7 +327,9 @@ function PaymentApprovedContent() {
         if (trxReferenceNumber) {
           try {
             transaction = await getTransactionByReference(trxReferenceNumber);
-            console.log("[Payment Approved] Found transaction by reference:", transaction.transactionId);
+            if (transaction) {
+              console.log("[Payment Approved] Found transaction by reference:", transaction.transactionId);
+            }
           } catch (error) {
             console.error("[Payment Approved] Error fetching transaction by reference:", error);
           }
@@ -338,17 +340,19 @@ function PaymentApprovedContent() {
         if (!transaction && metadata.transactionId) {
           try {
             transaction = await getTransaction(metadata.transactionId);
-            console.log("[Payment Approved] Found transaction by ID:", transaction.transactionId);
-            
-            // Validate that the transaction's reference matches the URL path
-            // This prevents mismatched transactions
-            if (transaction.trxReferenceNumber !== trxReferenceNumber) {
-              console.warn(
-                "[Payment Approved] Transaction reference mismatch:",
-                "Expected:", trxReferenceNumber,
-                "Found:", transaction.trxReferenceNumber
-              );
-              // Still use the transaction, but log the mismatch
+            if (transaction) {
+              console.log("[Payment Approved] Found transaction by ID:", transaction.transactionId);
+              
+              // Validate that the transaction's reference matches the URL path
+              // This prevents mismatched transactions
+              if (transaction.trxReferenceNumber !== trxReferenceNumber) {
+                console.warn(
+                  "[Payment Approved] Transaction reference mismatch:",
+                  "Expected:", trxReferenceNumber,
+                  "Found:", transaction.trxReferenceNumber
+                );
+                // Still use the transaction, but log the mismatch
+              }
             }
           } catch (error) {
             console.error("[Payment Approved] Error fetching transaction by ID:", error);
@@ -520,6 +524,10 @@ function PaymentApprovedContent() {
         // - Update lastTransactionId: Set to transaction.transactionId
         // - Add entry to subscriptionHistory array for audit trail
         // - Use Firestore batched writes for atomicity (all updates succeed or fail together)
+        
+        // Declare subscriptionEndDate in outer scope so it's accessible later
+        let subscriptionEndDate: string | undefined;
+        
         try {
           const activateResponse = await fetch("/api/payments/activate", {
             method: "POST",
@@ -554,7 +562,6 @@ function PaymentApprovedContent() {
 
           // Step 9a: Fetch updated user profile to get subscription expiration date
           // This gives us the subscriptionValidUntil date for display
-          let subscriptionEndDate: string | undefined;
           try {
             const updatedProfile = await getUserProfile(userId);
             if (updatedProfile?.subscription?.validUntil) {

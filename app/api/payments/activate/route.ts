@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { activateSubscriptionFromTransaction, getUserProfile, getTransaction } from "@/firebase/firestore";
+import { activateSubscriptionFromTransaction, getUserProfile, getTransaction, type Transaction } from "@/firebase/firestore";
 
 /**
  * Payment Activation API Route
@@ -56,11 +56,20 @@ export async function POST(req: NextRequest) {
 
     // Step 2: Fetch transaction to validate it exists and get user details
     // Edge Case: Transaction not found
-    let transaction;
+    let transaction: Transaction | null = null;
     try {
       transaction = await getTransaction(transactionId);
     } catch (error: any) {
       console.error("[Payments Activate] Error fetching transaction:", error);
+      return NextResponse.json(
+        { error: `Transaction not found: ${transactionId}` },
+        { status: 404 }
+      );
+    }
+
+    // Step 2a: Validate transaction was successfully fetched
+    // Edge Case: Transaction is null or undefined
+    if (!transaction) {
       return NextResponse.json(
         { error: `Transaction not found: ${transactionId}` },
         { status: 404 }
