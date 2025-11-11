@@ -52,3 +52,8 @@ NEXT_PUBLIC_META_PIXEL_ID=847265357880267
 # QA/Testing Mode (Development Only - ⚠️ DO NOT ENABLE IN PRODUCTION)
 # Set to "true" to bypass payment gateway and directly activate plans for testing
 # NEXT_PUBLIC_ENABLE_QA_PAYMENT_BYPASS=true
+
+# Test Mode Indicator (Client-side)
+# Set to "test" to show test phone number in footer (+201144661279)
+# Note: Phone number also shows automatically in development mode (NODE_ENV=development)
+# NEXT_PUBLIC_KASHIER_MODE=test
