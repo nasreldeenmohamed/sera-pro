@@ -71,9 +71,11 @@ export function PurchaseButton({ product }: { product: Product }) {
       */
 
       // Step 1: Call checkout API to create pending transaction and get iframe configuration
+      // Pass user email to ensure profile can be created if it doesn't exist
+      const email = user.email || "";
       const planName = product === "one_time" ? "one_time" : product === "flex_pack" ? "flex_pack" : "annual_pass";
       const checkoutResponse = await fetch(
-        `/api/payments/kashier/checkout?product=${encodeURIComponent(planName)}&userId=${encodeURIComponent(user.uid)}`
+        `/api/payments/kashier/checkout?product=${encodeURIComponent(planName)}&userId=${encodeURIComponent(user.uid)}&email=${encodeURIComponent(email)}`
       );
 
       if (!checkoutResponse.ok) {

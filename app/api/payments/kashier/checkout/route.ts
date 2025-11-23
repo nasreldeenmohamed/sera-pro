@@ -22,7 +22,7 @@ import { getUserProfile, createTransaction, saveUserProfile } from "@/firebase/f
  * 
  * Pricing (in EGP):
  * - one_time: 49 EGP (Single CV purchase: 1 CV, 3 templates, 7 days edits)
- * - flex_pack: 5 EGP (5 CVs, 6 months) - TEMPORARY: Changed from 149 for testing
+ * - flex_pack: 149 EGP (5 CVs, 6 months)
  * - annual_pass: 299 EGP (Unlimited CVs, 1 year)
  */
 export async function GET(req: NextRequest) {
@@ -111,7 +111,7 @@ export async function GET(req: NextRequest) {
         description: "1 CV, 3 Templates, Unlimited edits for 7 days",
       },
       flex_pack: {
-        price: 5, // TEMPORARY: Changed from 149 to 5 for testing
+        price: 149,
         currency: "EGP",
         name: "Flex Pack",
         duration: "6",

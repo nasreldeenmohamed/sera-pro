@@ -76,7 +76,7 @@ export function PlanCards({ currentPlan, onPurchase }: { currentPlan: UserPlan |
     {
       product: "flex_pack",
       name: { en: "Flex Pack", ar: "باقة مرنة" },
-      price: 5, // TEMPORARY: Changed from 149 to 5 for testing
+      price: 149,
       currency: "EGP",
       description: {
         en: "Great value for multiple CVs. Create up to 5 professional CVs with credits valid for 6 months.",

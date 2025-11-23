@@ -1041,7 +1041,7 @@ const PLAN_CONFIG: Record<string, {
   },
   flex_pack: {
     name: { en: "Flex Pack", ar: "باقة مرنة" },
-    price: "5", // TEMPORARY: Changed from 149 to 5 for testing
+    price: "149",
     duration: "6",
     durationType: "months",
     description: {
