@@ -408,17 +408,6 @@ export function Footer() {
               >
                 contact.serapro@gmail.com
               </a>
-              {/* Show phone number only in test mode */}
-              {(process.env.NEXT_PUBLIC_KASHIER_MODE === "test" || process.env.NODE_ENV === "development") && (
-                <> •{" "}
-                  <a 
-                    href="tel:+201144661279" 
-                    className="hover:underline hover:text-[#0d47a1] dark:hover:text-blue-400 transition-colors"
-                  >
-                    +201144661279
-                  </a>
-                </>
-              )}
             </p>
           </div>
 

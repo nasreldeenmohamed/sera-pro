@@ -70,47 +70,29 @@ export function PurchaseButton({ product }: { product: Product }) {
       }
       */
 
-      // PRODUCTION MODE: Normal payment flow through Kashier
-      // Payment keys are automatically selected based on user ID:
-      // - Test user: Uses test/sandbox keys
-      // - All other users: Uses production/live keys
-      
-      // Step 1: Request checkout URL from API
-      // The API endpoint will:
-      // - Create a pending Transaction record in Firestore
-      // - Generate Kashier payment URL using secure environment variables (ppLink)
-      // - Return both the payment URL and transactionId
+      // Step 1: Call checkout API to create pending transaction and get iframe configuration
       const planName = product === "one_time" ? "one_time" : product === "flex_pack" ? "flex_pack" : "annual_pass";
-      const checkoutUrl = `/api/payments/kashier/checkout?product=${encodeURIComponent(planName)}&userId=${encodeURIComponent(user.uid)}`;
-      
-      const res = await fetch(checkoutUrl);
-      if (!res.ok) {
-        const json = await res.json().catch(() => ({}));
-        
-        // Handle service unavailable (payment not configured)
-        if (res.status === 503 || json.code === "PAYMENT_NOT_CONFIGURED") {
-          throw new Error(
-            t(
-              "Payment service is temporarily unavailable. Please contact support.",
-              "خدمة الدفع غير متاحة مؤقتًا. يرجى التواصل مع الدعم."
-            )
-          );
-        }
-        
-        throw new Error(json?.error || t("Failed to create checkout session", "فشل إنشاء جلسة الدفع"));
-      }
-      
-      const json = await res.json();
-      if (!json.url) {
-        throw new Error(t("Invalid checkout response", "استجابة دفع غير صالحة"));
+      const checkoutResponse = await fetch(
+        `/api/payments/kashier/checkout?product=${encodeURIComponent(planName)}&userId=${encodeURIComponent(user.uid)}`
+      );
+
+      if (!checkoutResponse.ok) {
+        const error = await checkoutResponse.json().catch(() => ({}));
+        const errorMessage = error.error || t("Failed to create checkout session. Please try again.", "فشل إنشاء جلسة الدفع. يرجى المحاولة مرة أخرى.");
+        throw new Error(errorMessage);
       }
 
-      // Step 2: Redirect user to Kashier payment page
-      // This is a full-page redirect to Kashier's secure payment page
-      // The payment URL is generated server-side using secure environment variables
-      // After payment completion, Kashier will redirect back to our success/cancel URLs
-      // Note: The transaction has already been created in Firestore with status "pending"
-      window.location.href = json.url;
+      const { config, transactionId } = await checkoutResponse.json();
+      
+      if (!config || !transactionId) {
+        throw new Error(t("Invalid payment response.", "استجابة دفع غير صالحة."));
+      }
+
+      // Step 2: Navigate to iframe payment page with configuration
+      const configJson = encodeURIComponent(JSON.stringify(config));
+      const iframeUrl = `/payments/iframe?config=${configJson}&transactionId=${encodeURIComponent(transactionId)}`;
+      
+      window.location.href = iframeUrl;
     } catch (e: any) {
       setError(e?.message || t("Payment error", "خطأ في الدفع"));
     } finally {

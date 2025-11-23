@@ -59,6 +59,12 @@ export async function POST(req: NextRequest) {
     let transaction: Transaction | null = null;
     try {
       transaction = await getTransaction(transactionId);
+      console.log("[Payments Activate] Fetched transaction:", {
+        transactionId,
+        paymentStatus: transaction?.paymentStatus,
+        plan: transaction?.subscriptionPlanId,
+        userId: transaction?.userId,
+      });
     } catch (error: any) {
       console.error("[Payments Activate] Error fetching transaction:", error);
       return NextResponse.json(
@@ -78,11 +84,17 @@ export async function POST(req: NextRequest) {
 
     // Step 3: Validate payment status indicates success
     // Edge Case: Transaction not successful (should not activate)
+    console.log("[Payments Activate] Checking payment status:", {
+      currentStatus: transaction.paymentStatus,
+      expectedStatus: "2",
+      match: transaction.paymentStatus === "2",
+    });
     if (transaction.paymentStatus !== "2") {
       return NextResponse.json(
         {
           error: `Cannot activate subscription: Transaction has status "${transaction.paymentStatus}" (expected "2" for success)`,
           code: "TRANSACTION_NOT_SUCCESSFUL",
+          transactionStatus: transaction.paymentStatus,
         },
         { status: 400 }
       );

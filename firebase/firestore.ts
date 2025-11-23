@@ -13,7 +13,7 @@ export type SubscriptionHistoryEntry = {
   validUntil: any; // Firestore Timestamp - when this subscription expires
   amount: string; // Payment amount
   currency: string; // Payment currency
-  trxReferenceNumber?: string; // Kashier transaction reference
+  trxReferenceNumber?: string; // Payment gateway transaction reference
 };
 
 /**
@@ -46,21 +46,21 @@ export type UserProfile = {
 };
 
 /**
- * Transaction Entity - Firestore Model for Kashier Payment Tracking
+ * Transaction Entity - Firestore Model for Payment Tracking
  * 
  * Stores all payment transaction data in /transactions/{transactionId} collection.
  * Used for payment tracking, reporting, and audit trails.
  * 
- * Field Mappings from Kashier Payment Callback:
- * - trxReferenceNumber: Extracted from Kashier callback URL or response (unique payment reference)
- * - merchantOrderId: Kashier's merchant order ID (from orderId parameter in checkout)
+ * Field Mappings from Payment Gateway Callback:
+ * - trxReferenceNumber: Extracted from payment gateway callback URL or response (unique payment reference)
+ * - merchantOrderId: Payment gateway merchant order ID (from orderId parameter in checkout)
  * - orderId: Internal order ID used when creating checkout
- * - orderReference: Additional reference from Kashier (if provided)
- * - cardDataToken: Tokenized card data from Kashier (for recurring payments, if applicable)
- * - maskedCard: Masked card number (e.g., "****1234") from Kashier response
- * - cardBrand: Card brand (e.g., "VISA", "MASTERCARD") from Kashier response
- * - signature: Payment signature/hash from Kashier for verification
- * - mode: "test" or "live" - indicates which Kashier environment was used
+ * - orderReference: Additional reference from payment gateway (if provided)
+ * - cardDataToken: Tokenized card data from payment gateway (for recurring payments, if applicable)
+ * - maskedCard: Masked card number (e.g., "****1234") from payment gateway response
+ * - cardBrand: Card brand (e.g., "VISA", "MASTERCARD") from payment gateway response
+ * - signature: Payment signature/hash from payment gateway for verification
+ * - mode: "test" or "live" - indicates which payment gateway environment was used
  * 
  * Payment Status Values:
  * - "1" = pending (initial state when transaction is created)
@@ -100,13 +100,13 @@ export type Transaction = {
   // Language preference
   language: string; // UI language at time of transaction: "ar" or "en"
   
-  // Kashier Payment Details (populated from callback)
-  trxReferenceNumber: string; // Unique Kashier transaction reference (from callback URL/response)
+  // Payment Gateway Details (populated from callback)
+  trxReferenceNumber: string; // Unique payment gateway transaction reference (from callback URL/response)
   cardDataToken?: string; // Tokenized card data (for recurring payments, if applicable)
   maskedCard?: string; // Masked card number (e.g., "****1234")
-  merchantOrderId: string; // Kashier merchant order ID (from orderId in checkout)
+  merchantOrderId: string; // Payment gateway merchant order ID (from orderId in checkout)
   orderId: string; // Internal order ID used when creating checkout
-  orderReference?: string; // Additional reference from Kashier (if provided)
+  orderReference?: string; // Additional reference from payment gateway (if provided)
   cardBrand?: string; // Card brand: "VISA", "MASTERCARD", "MEEZA", etc.
   mode: "test" | "live"; // Payment environment: "test" (sandbox) or "live" (production)
   signature?: string; // Payment signature/hash from Kashier for verification
@@ -573,14 +573,17 @@ export async function activateSubscriptionFromTransaction(transactionId: string)
   }
   
   // Step 5: Prepare subscription update with data from Transaction
-  const now = serverTimestamp();
+  const now = serverTimestamp(); // For top-level fields
+  const nowTimestamp = Timestamp.now(); // For array elements (serverTimestamp() not allowed in arrays)
   const planId = transaction.subscriptionPlanId as "one_time" | "flex_pack" | "annual_pass";
   
   // Build subscription history entry for audit trail
+  // NOTE: Must use Timestamp.now() instead of serverTimestamp() because Firestore
+  // doesn't allow serverTimestamp() inside arrays
   const historyEntry: SubscriptionHistoryEntry = {
     transactionId: transaction.transactionId,
     plan: planId,
-    activatedAt: now,
+    activatedAt: nowTimestamp, // Use Timestamp.now() for array elements
     validUntil: expirationDate,
     amount: transaction.transactionAmount,
     currency: transaction.transactionCurrency,
@@ -596,9 +599,9 @@ export async function activateSubscriptionFromTransaction(transactionId: string)
     status: "active", // subscriptionIsActive = true (via status)
     validUntil: validUntil, // subscriptionValidUntil
     expirationDate: expirationDate,
-    lastPaymentDate: now,
+    lastPaymentDate: now, // serverTimestamp() is OK for top-level fields
     startDate: existingSubscription?.startDate || now, // Preserve original start date if exists
-    subscriptionHistory: [...existingHistory, historyEntry], // Add new entry to history
+    subscriptionHistory: [...existingHistory, historyEntry], // Add new entry to history (uses Timestamp.now())
   };
   
   // Add plan-specific fields
@@ -646,14 +649,25 @@ export async function activateSubscriptionFromTransaction(transactionId: string)
   // - Network issues
   // - Concurrent updates (Firestore will retry)
   // - Permission errors
-  await batch.commit();
-  
-  console.log("[Firestore] Subscription activated from transaction:", {
-    userId,
-    transactionId,
-    plan: planId,
-    validUntil: expirationDate.toDate().toISOString(),
-  });
+  try {
+    await batch.commit();
+    console.log("[Firestore] Subscription activated from transaction:", {
+      userId,
+      transactionId,
+      plan: planId,
+      validUntil: expirationDate.toDate().toISOString(),
+      subscriptionPlan: cleanedSubscription.plan,
+      subscriptionStatus: cleanedSubscription.status,
+    });
+  } catch (error: any) {
+    console.error("[Firestore] Failed to commit subscription update:", {
+      error: error.message,
+      code: error.code,
+      userId,
+      transactionId,
+    });
+    throw new Error(`Failed to update user profile subscription: ${error.message}`);
+  }
 }
 
 /**
@@ -988,7 +1002,7 @@ export async function deleteUserDraft(userId: string): Promise<void> {
 // TRANSACTION FUNCTIONS - Payment Transaction Tracking
 // ============================================================================
 // Transactions stored at /transactions/{transactionId}
-// Each transaction document tracks a payment attempt/result from Kashier
+// Each transaction document tracks a payment attempt/result from payment gateway
 //
 // Firestore Indexes Required:
 // - Collection: transactions
@@ -1027,7 +1041,7 @@ const PLAN_CONFIG: Record<string, {
   },
   flex_pack: {
     name: { en: "Flex Pack", ar: "باقة مرنة" },
-    price: "149",
+    price: "5", // TEMPORARY: Changed from 149 to 5 for testing
     duration: "6",
     durationType: "months",
     description: {
@@ -1050,7 +1064,7 @@ const PLAN_CONFIG: Record<string, {
 /**
  * Create a new pending transaction in Firestore
  * 
- * Called when user initiates a payment (before redirecting to Kashier).
+ * Called when user initiates a payment (before redirecting to payment gateway).
  * Creates a transaction record with status "1" (pending).
  * 
  * @param input - Transaction creation data
@@ -1059,7 +1073,7 @@ const PLAN_CONFIG: Record<string, {
  * @param input.userName - User's display name
  * @param input.userPhone - User's phone number (optional)
  * @param input.subscriptionPlanId - Plan identifier: "one_time", "flex_pack", "annual_pass"
- * @param input.orderId - Internal order ID (used when creating Kashier checkout)
+ * @param input.orderId - Internal order ID (used when creating payment gateway checkout)
  * @param input.mode - Payment mode: "test" or "live"
  * @param input.language - UI language: "ar" or "en"
  * @param input.trxReferenceNumber - Initial transaction reference (can be updated from callback)
@@ -1112,7 +1126,7 @@ export async function createTransaction(input: {
     // Language preference
     language: input.language,
     
-    // Kashier Payment Details (initial values, will be updated from callback)
+    // Payment Gateway Details (initial values, will be updated from callback)
     trxReferenceNumber: input.trxReferenceNumber,
     merchantOrderId: input.orderId, // Initially same as orderId, may be updated by Kashier
     orderId: input.orderId,
@@ -1152,11 +1166,11 @@ export async function getTransaction(transactionId: string): Promise<Transaction
 }
 
 /**
- * Get a transaction by Kashier reference number
+ * Get a transaction by payment gateway reference number
  * 
  * Useful for finding transactions from callback URLs that contain trxReferenceNumber.
  * 
- * @param trxReferenceNumber - Kashier transaction reference number
+ * @param trxReferenceNumber - Payment gateway transaction reference number
  * @returns Transaction object or null if not found
  */
 export async function getTransactionByReference(trxReferenceNumber: string): Promise<Transaction | null> {
@@ -1164,6 +1178,46 @@ export async function getTransactionByReference(trxReferenceNumber: string): Pro
   const transactionsRef = collection(db, "transactions");
   const q = query(transactionsRef, where("trxReferenceNumber", "==", trxReferenceNumber));
   const snapshot = await getDocs(q);
+  
+  if (snapshot.empty) {
+    return null;
+  }
+  
+  // Return the first match (should be unique)
+  const doc = snapshot.docs[0];
+  return {
+    transactionId: doc.id,
+    ...(doc.data() as Omit<Transaction, "transactionId">)
+  };
+}
+
+/**
+ * Get a transaction by order ID
+ * 
+ * Useful for finding transactions from webhooks that provide merchantOrderId.
+ * 
+ * @param orderId - Order ID (merchantOrderId)
+ * @returns Transaction object or null if not found
+ */
+export async function getTransactionByOrderId(orderId: string): Promise<Transaction | null> {
+  const db = getFirestore(getFirebaseApp());
+  const transactionsRef = collection(db, "transactions");
+  
+  // Try orderId first (most common)
+  let q = query(transactionsRef, where("orderId", "==", orderId));
+  let snapshot = await getDocs(q);
+  
+  if (!snapshot.empty) {
+    const doc = snapshot.docs[0];
+    return {
+      transactionId: doc.id,
+      ...(doc.data() as Omit<Transaction, "transactionId">)
+    };
+  }
+  
+  // Try merchantOrderId as fallback (Kashier may update this field)
+  q = query(transactionsRef, where("merchantOrderId", "==", orderId));
+  snapshot = await getDocs(q);
   
   if (snapshot.empty) {
     return null;
@@ -1197,7 +1251,7 @@ export async function getTransactionByReference(trxReferenceNumber: string): Pro
  * - cardDataToken: From callback query param (if provided, for recurring payments)
  * - orderReference: From callback query param (if provided)
  * - signature: From callback query param (for verification)
- * - merchantOrderId: May be updated if Kashier returns a different value
+ * - merchantOrderId: May be updated if payment gateway returns a different value
  * 
  * Note: Fields set at transaction creation (transactionAmount, transactionCurrency, orderId, mode)
  * are not updated here as they should remain constant. Only payment completion fields are updated.
@@ -1211,7 +1265,7 @@ export async function getTransactionByReference(trxReferenceNumber: string): Pro
  * - Caller should handle errors appropriately
  * 
  * @param transactionId - Transaction document ID to update
- * @param paymentData - Payment completion data from Kashier callback
+ * @param paymentData - Payment completion data from payment gateway callback
  * @param paymentData.paymentStatus - "2" (success) or "3" (failed)
  * @param paymentData.trxReferenceNumber - Updated reference number from callback (if different)
  * @param paymentData.maskedCard - Masked card number (optional)

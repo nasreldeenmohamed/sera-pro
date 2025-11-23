@@ -97,52 +97,62 @@ export function PlanActionButton({
     setLoading(true);
     
     try {
-      // Step 1: Call checkout API to create pending transaction and get payment URL
-      // The API endpoint:
-      // - Creates a pending Transaction record in Firestore
-      // - Generates Kashier payment URL using secure environment variables
-      // - Returns both the payment URL and transactionId
+      // Step 1: Call checkout API to create pending transaction and get iframe configuration
+      // Pass user email to ensure profile can be created if it doesn't exist
+      const email = user.email || "";
       const checkoutResponse = await fetch(
-        `/api/payments/kashier/checkout?product=${encodeURIComponent(product)}&userId=${encodeURIComponent(user.uid)}`
+        `/api/payments/kashier/checkout?product=${encodeURIComponent(product)}&userId=${encodeURIComponent(user.uid)}&email=${encodeURIComponent(email)}`
       );
 
       if (!checkoutResponse.ok) {
-        const error = await checkoutResponse.json().catch(() => ({}));
+        let errorMessage: string = t("Failed to create checkout session. Please try again.", "فشل إنشاء جلسة الدفع. يرجى المحاولة مرة أخرى.");
         
-        // Handle service unavailable (payment not configured)
-        if (checkoutResponse.status === 503 || error.code === "PAYMENT_NOT_CONFIGURED") {
-          alert(t(
-            "Payment service is temporarily unavailable. Please contact support.",
-            "خدمة الدفع غير متاحة مؤقتًا. يرجى التواصل مع الدعم."
-          ));
-          setLoading(false);
-          return;
+        // Try to parse error response
+        try {
+          const error = await checkoutResponse.json();
+          errorMessage = error.error || error.message || errorMessage;
+        } catch (parseError) {
+          // If response is not JSON, use status-specific messages
+          if (checkoutResponse.status === 503) {
+            errorMessage = t(
+              "Payment service is temporarily unavailable. Please try again in a few moments or contact support.",
+              "خدمة الدفع غير متاحة مؤقتًا. يرجى المحاولة مرة أخرى بعد قليل أو التواصل مع الدعم."
+            );
+          } else if (checkoutResponse.status === 500) {
+            errorMessage = t(
+              "An error occurred while processing your request. Please try again or contact support.",
+              "حدث خطأ أثناء معالجة طلبك. يرجى المحاولة مرة أخرى أو التواصل مع الدعم."
+            );
+          } else if (checkoutResponse.status === 404) {
+            errorMessage = t(
+              "Payment endpoint not found. Please contact support.",
+              "نقطة نهاية الدفع غير موجودة. يرجى التواصل مع الدعم."
+            );
+          }
         }
-
-        throw new Error(
-          error.error || t("Failed to create checkout session. Please try again.", "فشل إنشاء جلسة الدفع. يرجى المحاولة مرة أخرى.")
-        );
+        
+        console.error("[PlanActionButton] Checkout API error:", {
+          status: checkoutResponse.status,
+          statusText: checkoutResponse.statusText,
+          message: errorMessage,
+        });
+        
+        throw new Error(errorMessage);
       }
 
-      const { url, transactionId } = await checkoutResponse.json();
+      const { config, transactionId } = await checkoutResponse.json();
       
-      if (!url) {
+      if (!config || !transactionId) {
         throw new Error(t("Invalid payment response.", "استجابة دفع غير صالحة."));
       }
 
-      // Step 2: Show redirecting message to user
-      // This provides feedback that the transaction was created and redirect is happening
-      setRedirecting(true);
+      // Step 2: Navigate to iframe payment page with configuration
+      // Encode config as JSON string in URL parameter
+      const configJson = encodeURIComponent(JSON.stringify(config));
+      const iframeUrl = `/payments/iframe?config=${configJson}&transactionId=${encodeURIComponent(transactionId)}`;
       
-      // Optional: Show a brief message before redirect (enhances UX)
-      // The message appears for a very short time before redirect happens
-      setTimeout(() => {
-        // Step 3: Redirect user to Kashier payment page
-        // This is a full-page redirect to Kashier's secure payment page
-        // The payment URL is generated server-side using secure environment variables
-        // After payment completion, Kashier will redirect back to our success/cancel URLs
-        window.location.href = url;
-      }, 500); // Small delay to show "Redirecting..." message
+      setRedirecting(true);
+      router.push(iframeUrl);
       
     } catch (error: any) {
       console.error("[PlanActionButton] Payment checkout error:", error);
@@ -175,7 +185,11 @@ export function PlanActionButton({
   // Paid plans: Use button with onClick handler for auth check and payment redirect
   return (
     <Button 
-      onClick={handleAction} 
+      onClick={(e) => {
+        console.log("[PlanActionButton] Button clicked for product:", product);
+        e.preventDefault();
+        handleAction();
+      }} 
       className={className} 
       style={style}
       disabled={loading || redirecting}

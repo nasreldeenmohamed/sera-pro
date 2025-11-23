@@ -145,7 +145,7 @@ export default function Home() {
             {/* Flex Pack */}
             <div className="rounded-xl border p-6">
               <h3 className="text-lg font-semibold">{t("Flex Pack", "باقة مرنة")}</h3>
-              <p className="mt-1 text-3xl font-bold">EGP 149</p>
+              <p className="mt-1 text-3xl font-bold">EGP 5</p>
               <ul className="mt-4 space-y-2 text-sm text-zinc-700 dark:text-zinc-300">
                 {[t("5 CVs credits (wallet)", "رصيد 5 سير (محفظة)"), t("Valid for 6 months", "صالحة لمدة 6 أشهر"), t("AI + templates included", "ذكاء اصطناعي + قوالب")].map((f) => (
                   <li key={f} className="flex items-center gap-2"><Check className="h-4 w-4" /><span>{f}</span></li>
