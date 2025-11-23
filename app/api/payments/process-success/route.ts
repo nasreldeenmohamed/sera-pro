@@ -74,10 +74,10 @@ export async function POST(req: NextRequest) {
 
     // Check if already processed (idempotency)
     if (transaction.paymentStatus === "2") {
-      console.log("[Process Success API] Transaction already processed:", transaction.id);
+      console.log("[Process Success API] Transaction already processed:", transaction.transactionId);
       return NextResponse.json({
         success: true,
-        transactionId: transaction.id,
+        transactionId: transaction.transactionId,
         message: "Transaction already processed.",
       });
     }
@@ -99,14 +99,14 @@ export async function POST(req: NextRequest) {
     };
 
     // Update transaction with payment data
-    await updateTransactionWithPaymentData(transaction.id, updateData);
+    await updateTransactionWithPaymentData(transaction.transactionId, updateData);
 
     // Activate subscription
-    await activateSubscriptionFromTransaction(transaction.id);
+    await activateSubscriptionFromTransaction(transaction.transactionId);
 
     return NextResponse.json({
       success: true,
-      transactionId: transaction.id,
+      transactionId: transaction.transactionId,
     });
   } catch (error: any) {
     console.error("[Process Success API] Error:", error);
