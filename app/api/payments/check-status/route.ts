@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
 
     // Return transaction status
     return NextResponse.json({
-      transactionId: transaction.id,
+      transactionId: transaction.transactionId,
       paymentStatus: transaction.paymentStatus,
       subscriptionPlanId: transaction.subscriptionPlanId,
       transactionAmount: transaction.transactionAmount,
