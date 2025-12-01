@@ -702,7 +702,32 @@ function CreateCvPageContent() {
       cvLanguage: values.cvLanguage || "en", // Include CV language in draft
     };
 
-    // If authenticated, save to Firestore; otherwise prompt for auth
+    // Guest users cannot save drafts - require authentication
+    // Note: If pendingProtectedAction is already set (e.g., from Finish button),
+    // we don't overwrite it - let the caller handle the auth flow
+    if (!user) {
+      // Only set auth modal if no pending action is already set
+      // This allows Finish button to set its own action that includes save + navigate
+      if (!pendingProtectedAction) {
+        setAuthModalAction("save");
+        setPendingProtectedAction(() => async () => {
+          // After authentication, retry saving
+          const saveResult = await handleSaveDraft();
+          if (saveResult) {
+            setDraftStatus("success");
+            setDraftMessage(t("Draft saved successfully!", "تم حفظ المسودة بنجاح!"));
+            setTimeout(() => {
+              setDraftStatus("idle");
+              setDraftMessage(null);
+            }, 3000);
+          }
+        });
+        setShowAuthModal(true);
+      }
+      return false; // Save failed - requires authentication
+    }
+
+    // If authenticated, save to Firestore
     if (user) {
       setDraftSaving(true);
       setDraftStatus("idle");
@@ -791,28 +816,10 @@ function CreateCvPageContent() {
       } finally {
         setDraftSaving(false);
       }
-    } else {
-      // Guest mode: save to localStorage as fallback
-      // Note: Don't show auth modal here - let the caller (e.g., Finish button) handle it
-      try {
-        saveGuestDraft(draftData);
-        setDraftLastUpdated(new Date());
-        hasUnsavedChanges.current = false;
-        setDraftStatus("success");
-        setDraftMessage(t("Draft saved locally.", "تم حفظ المسودة محليًا."));
-        setTimeout(() => {
-          setDraftStatus("idle");
-          setDraftMessage(null);
-        }, 3000);
-        return true; // localStorage save succeeded
-      } catch (error: any) {
-        console.error("Failed to save guest draft:", error);
-        setDraftStatus("error");
-        setDraftMessage(t("Failed to save draft.", "فشل حفظ المسودة."));
-        setTimeout(() => setDraftStatus("idle"), 3000);
-        return false; // Save failed
-      }
     }
+    
+    // This should never be reached, but TypeScript requires a return
+    return false;
   }
 
   // Load draft function with confirmation if there are unsaved changes
@@ -1151,21 +1158,22 @@ function CreateCvPageContent() {
   }
 
   async function exportPdf() {
-    // PDF download is now gated - only available after payment
-    // Redirect to pricing/checkout page instead of showing download button
-    // This function is kept for potential future use (e.g., after payment completion)
+    // PDF download requires authentication
+    // After authentication, free users can download with watermark
+    // Paid users can download without watermark
     if (!user) {
       setAuthModalAction("download");
       setPendingProtectedAction(() => {
-        router.push("/pricing");
+        // After authentication, user can download from dashboard
+        router.push("/dashboard");
       });
       setShowAuthModal(true);
       return;
     }
 
-    // Check if user has paid (would check userPlan here in production)
-    // For now, redirect to pricing page
-    router.push("/pricing");
+    // Authenticated users can download from dashboard
+    // Free users get watermarked version, paid users get clean version
+    router.push("/dashboard");
   }
 
   // REMOVED: LinkedIn import handlers - CV import feature temporarily disabled
@@ -1226,8 +1234,8 @@ function CreateCvPageContent() {
             {!user && !draftLastUpdated && (
               <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
                 {t(
-                  "Creating as guest. Sign in to save to cloud and access premium features.",
-                  "الإنشاء كضيف. سجّل الدخول للحفظ على السحابة والوصول إلى الميزات المميزة."
+                  "Creating as guest. Sign in to save your CV and download it.",
+                  "الإنشاء كضيف. سجّل الدخول لحفظ سيرتك الذاتية وتنزيلها."
                 )}
               </p>
             )}
@@ -2181,18 +2189,17 @@ function CreateCvPageContent() {
                                 return;
                               }
                               
-                              // Save draft first (handles both authenticated and guest modes)
-                              // Wait for save to complete successfully before proceeding
-                              const saveSuccessful = await handleSaveDraft();
-                              
-                              if (!saveSuccessful) {
-                                // If save failed, don't proceed to dashboard
-                                // Error message already shown by handleSaveDraft
-                                return;
-                              }
-                              
-                              // For authenticated users: go to dashboard; for guests: prompt to sign in
+                              // For authenticated users: save and navigate to dashboard
                               if (user) {
+                                // Save draft first (authenticated users can save to Firestore)
+                                const saveSuccessful = await handleSaveDraft();
+                                
+                                if (!saveSuccessful) {
+                                  // If save failed, don't proceed to dashboard
+                                  // Error message already shown by handleSaveDraft
+                                  return;
+                                }
+                                
                                 // Small delay to ensure Firestore save is fully committed
                                 await new Promise(resolve => setTimeout(resolve, 500));
                                 // Set flag to indicate navigation from create-cv page
@@ -2201,14 +2208,21 @@ function CreateCvPageContent() {
                                 }
                                 router.push("/dashboard");
                               } else {
-                                // Guest user: prompt to sign in to access dashboard
+                                // Guest user: prompt to sign in, then save and navigate to dashboard
                                 setAuthModalAction("general");
-                                setPendingProtectedAction(() => () => {
-                                  // Set flag to indicate navigation from create-cv page
-                                  if (typeof window !== "undefined") {
-                                    sessionStorage.setItem("navigated_from_create_cv", "true");
+                                setPendingProtectedAction(async () => {
+                                  // After authentication, save the draft first
+                                  const saveSuccessful = await handleSaveDraft();
+                                  
+                                  if (saveSuccessful) {
+                                    // Small delay to ensure Firestore save is fully committed
+                                    await new Promise(resolve => setTimeout(resolve, 500));
+                                    // Set flag to indicate navigation from create-cv page
+                                    if (typeof window !== "undefined") {
+                                      sessionStorage.setItem("navigated_from_create_cv", "true");
+                                    }
+                                    router.push("/dashboard");
                                   }
-                                  router.push("/dashboard");
                                 });
                                 setShowAuthModal(true);
                               }
@@ -2220,9 +2234,16 @@ function CreateCvPageContent() {
                         
                         {/* Info about PDF download */}
                         <div className={`text-xs text-zinc-500 dark:text-zinc-400 text-center ${isAr ? "sm:text-right" : "sm:text-left"}`}>
-                          {t(
-                            "PDF download available after payment",
-                            "تنزيل PDF متاح بعد الدفع"
+                          {!user ? (
+                            t(
+                              "Sign in to save and download your CV",
+                              "سجّل الدخول لحفظ وتنزيل سيرتك الذاتية"
+                            )
+                          ) : (
+                            t(
+                              "Download available from dashboard (free version has watermark)",
+                              "التنزيل متاح من لوحة التحكم (النسخة المجانية تحتوي على علامة مائية)"
+                            )
                           )}
                         </div>
                       </div>
