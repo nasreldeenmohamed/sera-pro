@@ -70,13 +70,29 @@ export default function LoginPage() {
   // Redirect after authentication (handles both email/password and Google redirect flows)
   useEffect(() => {
     if (!authLoading && user) {
+      // For Google sign-in, restore redirect URL from sessionStorage (query params are lost during redirect)
+      const storedRedirect = sessionStorage.getItem("googleAuthRedirect");
+      const storedAction = sessionStorage.getItem("googleAuthAction");
+      
+      // Use stored values if available, otherwise use current query params
+      const finalRedirectUrl = storedRedirect || redirectUrl;
+      const finalAction = storedAction || action;
+      
+      // Clean up sessionStorage
+      if (storedRedirect) {
+        sessionStorage.removeItem("googleAuthRedirect");
+      }
+      if (storedAction) {
+        sessionStorage.removeItem("googleAuthAction");
+      }
+      
       // Store callback info for post-auth action execution
-      if (action) {
-        sessionStorage.setItem("authCallback", JSON.stringify({ action, callback: "pending" }));
+      if (finalAction) {
+        sessionStorage.setItem("authCallback", JSON.stringify({ action: finalAction, callback: "pending" }));
       }
 
       // Redirect to intended page or dashboard
-      const targetUrl = redirectUrl || "/dashboard";
+      const targetUrl = finalRedirectUrl || "/dashboard";
       console.log("[Login] User authenticated (via email/password or Google redirect), redirecting to:", targetUrl);
       router.replace(targetUrl);
     }
@@ -122,6 +138,17 @@ export default function LoginPage() {
     setLoading(true);
     
     try {
+      // Store redirect URL and action in sessionStorage BEFORE redirect
+      // Firebase's signInWithRedirect doesn't preserve query parameters, so we need to store them
+      if (redirectUrl) {
+        sessionStorage.setItem("googleAuthRedirect", redirectUrl);
+        console.log("[Login] Stored redirect URL in sessionStorage:", redirectUrl);
+      }
+      if (action) {
+        sessionStorage.setItem("googleAuthAction", action);
+        console.log("[Login] Stored action in sessionStorage:", action);
+      }
+      
       console.log("[Login] 🚀 Starting Google sign-in redirect...");
       console.log("[Login] Current page URL:", window.location.href);
       console.log("[Login] Firebase configured:", typeof window !== "undefined" ? "yes (browser)" : "no (server)");

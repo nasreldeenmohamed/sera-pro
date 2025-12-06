@@ -1,5 +1,5 @@
 "use client";
-import { Document, Page, Text, View, StyleSheet, Font } from "@react-pdf/renderer";
+import { Document, Page, Text, View, StyleSheet, Font, Image } from "@react-pdf/renderer";
 
 /**
  * PDF Template Components
@@ -52,9 +52,32 @@ const styles = StyleSheet.create({
     top: "35%",
     left: "15%",
     fontSize: 64,
-    color: "#d1d5db",
-    opacity: 0.3,
+    color: "#6b7280",
+    opacity: 0.6,
     transform: "rotate(-45deg)",
+    fontWeight: "bold",
+    letterSpacing: 3,
+  },
+  watermarkContainer: {
+    position: "absolute",
+    top: "30%",
+    left: "10%",
+    width: "80%",
+    alignItems: "center",
+    justifyContent: "center",
+    transform: "rotate(-45deg)",
+    transformOrigin: "center center",
+  },
+  watermarkLogo: {
+    width: 80,
+    height: 80,
+    opacity: 0.6,
+    marginBottom: 8,
+  },
+  watermarkText: {
+    fontSize: 64,
+    color: "#6b7280",
+    opacity: 0.6,
     fontWeight: "bold",
     letterSpacing: 3,
   },
@@ -65,30 +88,55 @@ const styles = StyleSheet.create({
 });
 
 /**
+ * Watermark component that appears on every page
+ * Uses 'fixed' prop to ensure it renders on all pages
+ */
+function Watermark({ isAr, logoUrl }: { isAr: boolean; logoUrl: string }) {
+  return (
+    <View fixed style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 0 }}>
+      <View style={styles.watermarkContainer}>
+        {/* Logo */}
+        <Image
+          src={logoUrl}
+          style={styles.watermarkLogo}
+        />
+        {/* Text */}
+        <Text style={styles.watermarkText}>
+          {isAr ? "سيرة برو" : "SERA PRO"}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+/**
  * Classic CV Template
  * 
  * Supports both Arabic (RTL) and English (LTR) layouts.
  * - Uses appropriate date separators (Arabic: "إلى", English: "-")
  * - Applies RTL direction for Arabic CVs
  * - Formats skills list with appropriate separators (Arabic: "، ", English: ", ")
- * - Supports watermark overlay for free plan users
+ * - Supports watermark overlay for free plan users (appears on all pages)
  * 
  * @param data - CV data object containing personal info, experience, education, skills, etc.
  * @param isAr - Whether the CV content is in Arabic (affects RTL/LTR direction)
- * @param showWatermark - If true, displays "Sera Pro - سيرة برو" watermark diagonally across the page
+ * @param showWatermark - If true, displays "Sera Pro - سيرة برو" watermark diagonally across all pages
  */
 export function ClassicTemplate({ data, isAr, showWatermark = false, templateKey }: { data: any; isAr: boolean; showWatermark?: boolean; templateKey?: string }) {
+  // Get full URL for logo image (react-pdf needs absolute URL in browser context)
+  const logoUrl = typeof window !== "undefined" 
+    ? `${window.location.origin}/assets/images/sera_pro_logo_hd.png`
+    : "/assets/images/sera_pro_logo_hd.png";
+
   return (
     <Document>
-      <Page size="A4" style={[styles.page, isAr ? styles.rtl : null] as any}>
-        {/* Prominent watermark overlay for free plan users */}
-        {showWatermark && (
-          <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 0 }}>
-            <Text style={styles.watermark}>
-              {isAr ? "سيرة برو" : "SERA PRO"}
-            </Text>
-          </View>
-        )}
+      <Page 
+        size="A4" 
+        style={[styles.page, isAr ? styles.rtl : null] as any}
+        wrap={true}
+      >
+        {/* Watermark appears on every page using 'fixed' prop */}
+        {showWatermark && <Watermark isAr={isAr} logoUrl={logoUrl} />}
         
         {/* CV Content */}
         <View style={styles.content}>

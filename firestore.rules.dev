@@ -1,0 +1,47 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // DEVELOPMENT/TEST RULES - More permissive for testing
+    // WARNING: Do NOT use these rules in production!
+    
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // User Profiles Collection
+    // Allow authenticated users to read/write their own profile
+    // Allow read of any profile for testing (remove in production)
+    match /userProfiles/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && (request.auth.uid == userId || resource == null);
+      allow delete: if isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // Transactions Collection
+    // Allow authenticated users to read/write transactions
+    match /transactions/{transactionId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isAuthenticated();
+    }
+    
+    // CV Drafts Collection
+    // Allow authenticated users to read/write CV drafts
+    match /cvs/{cvId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isAuthenticated();
+    }
+    
+    // Default: Deny all other access
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+

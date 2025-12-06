@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/tooltip";
 import { CV_TIPS, FIELD_HELP, hasMinimumDataForAI, formatValidationMessage, countFormErrors } from "@/lib/cv-helpers";
 import { getPersonalLabels, getExperienceLabels, getEducationLabels, getSkillsLabels, getLanguagesLabels, getCertificationsLabels, getProjectsLabels, getSectionHeaders } from "@/lib/cv-language-labels";
+import { formatDateForDisplay, formatDateRange } from "@/lib/utils";
 import { AuthRequiredModal } from "@/components/auth/AuthRequiredModal";
 import {
   saveGuestDraft,
@@ -62,6 +63,7 @@ const validateDate = (date: string): boolean => {
   const [year, month] = date.split("-").map(Number);
   return year >= 1900 && year <= 2100 && month >= 1 && month <= 12;
 };
+
 
 // Custom validation: Phone number (flexible format)
 const phoneRegex = /^[\d\s\-\+\(\)]{7,20}$/;
@@ -318,8 +320,10 @@ function CreateCvPageContent() {
   const handleTemplateUpgrade = () => {
     setAuthModalAction("premium");
     setPendingProtectedAction(() => {
-      // After auth, redirect to pricing
-      router.push("/pricing");
+      // After auth, redirect to pricing (deferred to avoid render issues)
+      setTimeout(() => {
+        router.push("/pricing");
+      }, 0);
     });
     setShowAuthModal(true);
   };
@@ -1012,6 +1016,23 @@ function CreateCvPageContent() {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
 
+  // Clear AI error when form becomes valid (user fixes validation errors)
+  useEffect(() => {
+    if (!aiError) return; // No error to clear
+    
+    const checkValidation = async () => {
+      const isValid = await form.trigger();
+      if (isValid) {
+        // Form is now valid, clear the error
+        setAiError(null);
+      }
+    };
+    
+    // Debounce validation check to avoid excessive calls
+    const timeoutId = setTimeout(checkValidation, 500);
+    return () => clearTimeout(timeoutId);
+  }, [formValues, aiError, form]);
+
   // REMOVED: LinkedIn import state - CV import feature temporarily disabled
   // const [linkedInLoading, setLinkedInLoading] = useState(false);
   // const [linkedInError, setLinkedInError] = useState<string | null>(null);
@@ -1044,6 +1065,10 @@ function CreateCvPageContent() {
           `يرجى إكمال الحقول التالية قبل استخدام تحسين الذكاء الاصطناعي: ${missingText}`
         )
       );
+      // Auto-clear error after 5 seconds
+      setTimeout(() => {
+        setAiError(null);
+      }, 5000);
       return;
     }
 
@@ -1056,11 +1081,16 @@ function CreateCvPageContent() {
           "يرجى إصلاح أخطاء التحقق قبل استخدام تحسين الذكاء الاصطناعي."
         )
       );
+      // Auto-clear error after 5 seconds
+      setTimeout(() => {
+        setAiError(null);
+      }, 5000);
       return;
     }
 
-    setAiLoading(true);
+    // Clear any previous errors since validation passed
     setAiError(null);
+    setAiLoading(true);
     try {
       const currentValues = form.getValues();
       // Call AI enhancement API endpoint
@@ -1128,6 +1158,9 @@ function CreateCvPageContent() {
         });
         setPresentStates(enhancedPresentStates);
         
+        // Clear any errors on success
+        setAiError(null);
+        
         // Show success message (include fallback warning if applicable)
         const successMsg = json.fallback 
           ? t("CV enhanced (using fallback - API key may be missing)", "تم تحسين السيرة الذاتية (استخدام بديل - قد يكون مفتاح API مفقود)")
@@ -1145,13 +1178,18 @@ function CreateCvPageContent() {
       }
     } catch (e: any) {
       console.error("AI enhancement error:", e);
-      setAiError(e?.message || t("AI enhancement error", "خطأ في تحسين الذكاء الاصطناعي"));
+      const errorMessage = e?.message || t("AI enhancement error", "خطأ في تحسين الذكاء الاصطناعي");
+      setAiError(errorMessage);
       setDraftStatus("error");
-      setDraftMessage(e?.message || t("AI enhancement error", "خطأ في تحسين الذكاء الاصطناعي"));
+      setDraftMessage(errorMessage);
       setTimeout(() => {
         setDraftStatus("idle");
         setDraftMessage(null);
       }, 5000);
+      // Auto-clear AI error after 8 seconds
+      setTimeout(() => {
+        setAiError(null);
+      }, 8000);
     } finally {
       setAiLoading(false);
     }
@@ -1164,8 +1202,10 @@ function CreateCvPageContent() {
     if (!user) {
       setAuthModalAction("download");
       setPendingProtectedAction(() => {
-        // After authentication, user can download from dashboard
-        router.push("/dashboard");
+        // After authentication, user can download from dashboard (deferred to avoid render issues)
+        setTimeout(() => {
+          router.push("/dashboard");
+        }, 0);
       });
       setShowAuthModal(true);
       return;
@@ -1607,11 +1647,19 @@ function CreateCvPageContent() {
                                     <HelpCircle className="h-4 w-4 text-zinc-400 cursor-help" />
                                   </TooltipTrigger>
                                     <TooltipContent className="max-w-xs" dir={isCvAr ? "rtl" : "ltr"}>
-                                      <p>{isCvAr ? CV_TIPS.date.ar : CV_TIPS.date.en}</p>
+                                      <p>{isCvAr ? "اختر الشهر والسنة من التقويم" : "Select month and year from calendar"}</p>
                                     </TooltipContent>
                                   </Tooltip>
                                 </FormLabel>
-                                <FormControl><Input placeholder={expLabels.startDate.placeholder} {...field} dir={isCvAr ? "rtl" : "ltr"} /></FormControl>
+                                <FormControl>
+                                  <Input 
+                                    type="month"
+                                    placeholder={expLabels.startDate.placeholder} 
+                                    {...field} 
+                                    value={field.value || ""}
+                                    dir={isCvAr ? "rtl" : "ltr"} 
+                                  />
+                                </FormControl>
                                 <FormMessage />
                               </FormItem>
                             )} />
@@ -1656,6 +1704,7 @@ function CreateCvPageContent() {
                                   </div>
                                   <FormControl>
                                     <Input
+                                      type="month"
                                       placeholder={isPresent ? expLabels.present.label : expLabels.endDate.placeholder}
                                       {...field}
                                       value={field.value || ""}
@@ -1823,12 +1872,13 @@ function CreateCvPageContent() {
                                           <HelpCircle className="h-4 w-4 text-zinc-400 cursor-help" />
                                         </TooltipTrigger>
                                         <TooltipContent className="max-w-xs" dir={isCvAr ? "rtl" : "ltr"}>
-                                          <p>{isCvAr ? CV_TIPS.date.ar : CV_TIPS.date.en}</p>
+                                          <p>{isCvAr ? "اختر الشهر والسنة من التقويم" : "Select month and year from calendar"}</p>
                                         </TooltipContent>
                                       </Tooltip>
                                     </FormLabel>
                                     <FormControl>
                                       <Input 
+                                        type="month"
                                         placeholder={projLabels.startDate.placeholder} 
                                         {...field} 
                                         value={field.value || ""}
@@ -1847,12 +1897,13 @@ function CreateCvPageContent() {
                                           <HelpCircle className="h-4 w-4 text-zinc-400 cursor-help" />
                                         </TooltipTrigger>
                                         <TooltipContent className="max-w-xs" dir={isCvAr ? "rtl" : "ltr"}>
-                                          <p>{isCvAr ? "اتركه فارغاً للمشروع الحالي" : "Leave empty for ongoing project"}</p>
+                                          <p>{isCvAr ? "اختر الشهر والسنة من التقويم أو اتركه فارغاً للمشروع الحالي" : "Select month and year from calendar or leave empty for ongoing project"}</p>
                                         </TooltipContent>
                                       </Tooltip>
                                     </FormLabel>
                                     <FormControl>
                                       <Input 
+                                        type="month"
                                         placeholder={projLabels.endDate.placeholder} 
                                         {...field} 
                                         value={field.value || ""}
@@ -2221,7 +2272,9 @@ function CreateCvPageContent() {
                                     if (typeof window !== "undefined") {
                                       sessionStorage.setItem("navigated_from_create_cv", "true");
                                     }
-                                    router.push("/dashboard");
+                                    setTimeout(() => {
+                                      router.push("/dashboard");
+                                    }, 0);
                                   }
                                 });
                                 setShowAuthModal(true);

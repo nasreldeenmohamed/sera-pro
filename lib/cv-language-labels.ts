@@ -212,3 +212,41 @@ export const getSectionHeaders = (cvLanguage: CvLanguage) => {
   };
 };
 
+/**
+ * CV Language Translation Helper
+ * Provides translations based on CV language (not UI locale)
+ * Use this for all static strings in CV preview templates
+ */
+export const getCvTranslations = (cvLanguage: CvLanguage) => {
+  const isAr = cvLanguage === "ar";
+  return {
+    // Section headers
+    professionalSummary: isAr ? "ملخص مهني" : "Professional Summary",
+    professionalExperience: isAr ? "الخبرة المهنية" : "Professional Experience",
+    projects: isAr ? "المشاريع" : "Projects",
+    education: isAr ? "التعليم" : "Education",
+    skills: isAr ? "المهارات" : "Skills",
+    languages: isAr ? "اللغات" : "Languages",
+    certifications: isAr ? "الشهادات" : "Certifications",
+    
+    // Placeholder/default values
+    yourName: isAr ? "اسمك" : "Your Name",
+    role: isAr ? "الوظيفة" : "Role",
+    company: isAr ? "الشركة" : "Company",
+    projectTitle: isAr ? "عنوان المشروع" : "Project Title",
+    degree: isAr ? "المؤهل" : "Degree",
+    institution: isAr ? "المؤسسة" : "Institution",
+    
+    // Date labels
+    present: isAr ? "حتى الآن" : "Present",
+    to: isAr ? "إلى" : "-",
+    
+    // Empty state
+    cvPreview: isAr ? "معاينة السيرة الذاتية" : "CV Preview",
+    startFillingForm: isAr ? "ابدأ بملء النموذج لرؤية معاينة سيرتك الذاتية هنا" : "Start filling the form to see your CV preview here",
+    
+    // Summary section
+    summary: isAr ? "الملخص" : "Summary",
+  };
+};
+

@@ -3,7 +3,8 @@ import { useLocale } from "@/lib/locale-context";
 import { useMemo } from "react";
 import type { CvDraftData } from "@/firebase/firestore";
 import { getTemplate } from "@/lib/templates";
-import { cn } from "@/lib/utils";
+import { cn, formatDateForDisplay, formatDateRange } from "@/lib/utils";
+import { getCvTranslations, type CvLanguage } from "@/lib/cv-language-labels";
 
 /**
  * Live CV Preview Component
@@ -29,8 +30,8 @@ type LiveCvPreviewProps = {
 /**
  * Classic Template - Traditional professional layout
  */
-const ClassicTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) => {
-  const { t } = useLocale();
+const ClassicTemplate = ({ data, isAr, cvLanguage }: { data: CvDraftData; isAr: boolean; cvLanguage: CvLanguage }) => {
+  const cvT = getCvTranslations(cvLanguage);
   const template = getTemplate("classic");
   const colors = template?.previewColors || { primary: "#0d47a1", secondary: "#f5f5f5", accent: "#1976d2", text: "#212121" };
 
@@ -42,7 +43,7 @@ const ClassicTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) =
     >
       <header className="mb-6 pb-4 border-b-2" style={{ borderColor: colors.primary }}>
         <h1 className="text-3xl font-bold mb-2" style={{ color: colors.primary }}>
-          {data.fullName || t("Your Name", "اسمك")}
+          {data.fullName || cvT.yourName}
         </h1>
         {data.title && (
           <p className="text-lg text-zinc-700 mb-2">{data.title}</p>
@@ -62,7 +63,7 @@ const ClassicTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) =
       {data.summary && (
         <section className="mb-6">
           <h2 className="text-xl font-semibold mb-2 pb-1" style={{ color: colors.primary, borderBottom: `2px solid ${colors.primary}` }}>
-            {t("Professional Summary", "ملخص مهني")}
+            {cvT.professionalSummary}
           </h2>
           <p className="text-zinc-700 whitespace-pre-line leading-relaxed">{data.summary}</p>
         </section>
@@ -71,18 +72,18 @@ const ClassicTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) =
       {data.experience && data.experience.length > 0 && (
         <section className="mb-6">
           <h2 className="text-xl font-semibold mb-3 pb-1" style={{ color: colors.primary, borderBottom: `2px solid ${colors.primary}` }}>
-            {t("Professional Experience", "الخبرة المهنية")}
+            {cvT.professionalExperience}
           </h2>
           <div className="space-y-4">
             {data.experience.map((exp, idx) => (
               <div key={idx} className="mb-4">
                 <div className={cn("flex justify-between items-start mb-1", isAr ? "flex-row-reverse" : "")}>
                   <div className="flex-1">
-                    <h3 className="font-semibold text-lg text-zinc-900">{exp.role || t("Role", "الوظيفة")}</h3>
-                    <p className="text-zinc-700 font-medium">{exp.company || t("Company", "الشركة")}</p>
+                    <h3 className="font-semibold text-lg text-zinc-900">{exp.role || cvT.role}</h3>
+                    <p className="text-zinc-700 font-medium">{exp.company || cvT.company}</p>
                   </div>
                   <div className={cn("text-sm text-zinc-600 whitespace-nowrap", isAr ? "ml-3" : "mr-3")}>
-                    {exp.startDate || ""} {exp.endDate ? ` ${isAr ? "إلى" : "-"} ${exp.endDate}` : ` ${isAr ? "-" : "-"} ${t("Present", "حتى الآن")}`}
+                    {exp.startDate ? formatDateRange(exp.startDate, exp.endDate, cvT.present) : ""}
                   </div>
                 </div>
                 {exp.description && (
@@ -97,17 +98,17 @@ const ClassicTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) =
       {data.projects && data.projects.length > 0 && (
         <section className="mb-6">
           <h2 className="text-xl font-semibold mb-3 pb-1" style={{ color: colors.primary, borderBottom: `2px solid ${colors.primary}` }}>
-            {t("Projects", "المشاريع")}
+            {cvT.projects}
           </h2>
           <div className="space-y-4">
             {data.projects.map((project, idx) => (
               <div key={idx} className="mb-4">
                 <div className={cn("flex justify-between items-start mb-1", isAr ? "flex-row-reverse" : "")}>
                   <div className="flex-1">
-                    <h3 className="font-semibold text-lg text-zinc-900">{project.title || t("Project Title", "عنوان المشروع")}</h3>
+                    <h3 className="font-semibold text-lg text-zinc-900">{project.title || cvT.projectTitle}</h3>
                   </div>
                   <div className={cn("text-sm text-zinc-600 whitespace-nowrap", isAr ? "ml-3" : "mr-3")}>
-                    {project.startDate || ""} {project.endDate ? ` ${isAr ? "إلى" : "-"} ${project.endDate}` : ` ${isAr ? "-" : "-"} ${t("Present", "حتى الآن")}`}
+                    {project.startDate ? formatDateRange(project.startDate, project.endDate, cvT.present) : ""}
                   </div>
                 </div>
                 {project.description && (
@@ -122,17 +123,17 @@ const ClassicTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) =
       {data.education && data.education.length > 0 && (
         <section className="mb-6">
           <h2 className="text-xl font-semibold mb-3 pb-1" style={{ color: colors.primary, borderBottom: `2px solid ${colors.primary}` }}>
-            {t("Education", "التعليم")}
+            {cvT.education}
           </h2>
           <div className="space-y-3">
             {data.education.map((edu, idx) => (
               <div key={idx} className={cn("flex justify-between items-start", isAr ? "flex-row-reverse" : "")}>
                 <div className="flex-1">
-                  <h3 className="font-semibold text-zinc-900">{edu.degree || t("Degree", "المؤهل")}</h3>
-                  <p className="text-zinc-700">{edu.school || t("Institution", "المؤسسة")}</p>
+                  <h3 className="font-semibold text-zinc-900">{edu.degree || cvT.degree}</h3>
+                  <p className="text-zinc-700">{edu.school || cvT.institution}</p>
                 </div>
                 <div className={cn("text-sm text-zinc-600 whitespace-nowrap", isAr ? "ml-3" : "mr-3")}>
-                  {edu.startDate || ""} {edu.endDate ? ` ${isAr ? "إلى" : "-"} ${edu.endDate}` : ""}
+                  {edu.startDate ? (edu.endDate ? `${formatDateForDisplay(edu.startDate)} ${cvT.to} ${formatDateForDisplay(edu.endDate)}` : formatDateForDisplay(edu.startDate)) : ""}
                 </div>
               </div>
             ))}
@@ -143,7 +144,7 @@ const ClassicTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) =
       {data.skills && data.skills.length > 0 && (
         <section className="mb-6">
           <h2 className="text-xl font-semibold mb-3 pb-1" style={{ color: colors.primary, borderBottom: `2px solid ${colors.primary}` }}>
-            {t("Skills", "المهارات")}
+            {cvT.skills}
           </h2>
           <div className="flex flex-wrap gap-2">
             {data.skills.map((skill, idx) => (
@@ -160,7 +161,7 @@ const ClassicTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) =
       {data.languages && data.languages.length > 0 && (
         <section className="mb-6">
           <h2 className="text-xl font-semibold mb-3 pb-1" style={{ color: colors.primary, borderBottom: `2px solid ${colors.primary}` }}>
-            {t("Languages", "اللغات")}
+            {cvT.languages}
           </h2>
           <div className="flex flex-wrap gap-2">
             {data.languages.map((lang, idx) => (
@@ -178,7 +179,7 @@ const ClassicTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) =
       {data.certifications && data.certifications.length > 0 && (
         <section className="mb-6">
           <h2 className="text-xl font-semibold mb-3 pb-1" style={{ color: colors.primary, borderBottom: `2px solid ${colors.primary}` }}>
-            {t("Certifications", "الشهادات")}
+            {cvT.certifications}
           </h2>
           <ul className={cn("list-disc space-y-1", isAr ? "mr-6" : "ml-6")}>
             {data.certifications.map((cert, idx) => (
@@ -190,8 +191,8 @@ const ClassicTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) =
 
       {(!data.fullName && !data.experience?.length && !data.education?.length) && (
         <div className="text-center py-12 text-zinc-400">
-          <p className="text-lg mb-2">{t("CV Preview", "معاينة السيرة الذاتية")}</p>
-          <p className="text-sm">{t("Start filling the form to see your CV preview here", "ابدأ بملء النموذج لرؤية معاينة سيرتك الذاتية هنا")}</p>
+          <p className="text-lg mb-2">{cvT.cvPreview}</p>
+          <p className="text-sm">{cvT.startFillingForm}</p>
         </div>
       )}
     </div>
@@ -201,8 +202,8 @@ const ClassicTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) =
 /**
  * Modern Template - Clean contemporary design
  */
-const ModernTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) => {
-  const { t } = useLocale();
+const ModernTemplate = ({ data, isAr, cvLanguage }: { data: CvDraftData; isAr: boolean; cvLanguage: CvLanguage }) => {
+  const cvT = getCvTranslations(cvLanguage);
   const template = getTemplate("modern");
   const colors = template?.previewColors || { primary: "#1565c0", secondary: "#ffffff", accent: "#42a5f5", text: "#424242" };
 
@@ -213,7 +214,7 @@ const ModernTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) =>
     >
       <header className="mb-6 pb-4" style={{ borderBottom: `3px solid ${colors.accent}` }}>
         <h1 className="text-4xl font-light mb-1" style={{ color: colors.primary, fontWeight: 300 }}>
-          {data.fullName || t("Your Name", "اسمك")}
+          {data.fullName || cvT.yourName}
         </h1>
         {data.title && (
           <p className="text-base text-zinc-600 mb-3 uppercase tracking-wide">{data.title}</p>
@@ -233,7 +234,7 @@ const ModernTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) =>
       {data.summary && (
         <section className="mb-6">
           <h2 className="text-lg font-semibold mb-2 uppercase tracking-wider" style={{ color: colors.primary }}>
-            {t("Summary", "الملخص")}
+            {cvT.summary}
           </h2>
           <p className="text-zinc-700 text-sm leading-relaxed">{data.summary}</p>
         </section>
@@ -242,18 +243,18 @@ const ModernTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) =>
       {data.experience && data.experience.length > 0 && (
         <section className="mb-6">
           <h2 className="text-lg font-semibold mb-3 uppercase tracking-wider" style={{ color: colors.primary }}>
-            {t("Experience", "الخبرات")}
+            {cvT.professionalExperience}
           </h2>
           <div className="space-y-4">
             {data.experience.map((exp, idx) => (
               <div key={idx} className={cn(isAr ? "border-r-2 pr-4" : "border-l-2 pl-4")} style={{ borderColor: colors.accent }}>
                 <div className={cn("flex justify-between items-start mb-1", isAr ? "flex-row-reverse" : "")}>
                   <div className="flex-1">
-                    <h3 className="font-semibold text-base">{exp.role || t("Role", "الوظيفة")}</h3>
-                    <p className="text-sm text-zinc-600">{exp.company || t("Company", "الشركة")}</p>
+                    <h3 className="font-semibold text-base">{exp.role || cvT.role}</h3>
+                    <p className="text-sm text-zinc-600">{exp.company || cvT.company}</p>
                   </div>
                   <div className={cn("text-xs text-zinc-500 whitespace-nowrap", isAr ? "ml-3" : "mr-3")}>
-                    {exp.startDate || ""} {exp.endDate ? ` ${isAr ? "إلى" : "-"} ${exp.endDate}` : ` ${t("Present", "حتى الآن")}`}
+                    {exp.startDate ? formatDateRange(exp.startDate, exp.endDate, cvT.present) : ""}
                   </div>
                 </div>
                 {exp.description && (
@@ -268,17 +269,17 @@ const ModernTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) =>
       {data.education && data.education.length > 0 && (
         <section className="mb-6">
           <h2 className="text-lg font-semibold mb-3 uppercase tracking-wider" style={{ color: colors.primary }}>
-            {t("Education", "التعليم")}
+            {cvT.education}
           </h2>
           <div className="space-y-3">
             {data.education.map((edu, idx) => (
               <div key={idx} className={cn("flex justify-between items-start", isAr ? "border-r-2 pr-4 flex-row-reverse" : "border-l-2 pl-4")} style={{ borderColor: colors.accent }}>
                 <div className="flex-1">
-                  <h3 className="font-semibold text-sm">{edu.degree || t("Degree", "المؤهل")}</h3>
-                  <p className="text-xs text-zinc-600">{edu.school || t("Institution", "المؤسسة")}</p>
+                  <h3 className="font-semibold text-sm">{edu.degree || cvT.degree}</h3>
+                  <p className="text-xs text-zinc-600">{edu.school || cvT.institution}</p>
                 </div>
                 <div className={cn("text-xs text-zinc-500 whitespace-nowrap", isAr ? "ml-3" : "mr-3")}>
-                  {edu.startDate || ""} {edu.endDate ? ` ${isAr ? "إلى" : "-"} ${edu.endDate}` : ""}
+                  {edu.startDate ? (edu.endDate ? `${formatDateForDisplay(edu.startDate)} ${cvT.to} ${formatDateForDisplay(edu.endDate)}` : formatDateForDisplay(edu.startDate)) : ""}
                 </div>
               </div>
             ))}
@@ -289,7 +290,7 @@ const ModernTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) =>
       {data.skills && data.skills.length > 0 && (
         <section className="mb-6">
           <h2 className="text-lg font-semibold mb-3 uppercase tracking-wider" style={{ color: colors.primary }}>
-            {t("Skills", "المهارات")}
+            {cvT.skills}
           </h2>
           <div className="flex flex-wrap gap-2">
             {data.skills.map((skill, idx) => (
@@ -306,7 +307,7 @@ const ModernTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) =>
       {data.languages && data.languages.length > 0 && (
         <section className="mb-6">
           <h2 className="text-lg font-semibold mb-3 uppercase tracking-wider" style={{ color: colors.primary }}>
-            {t("Languages", "اللغات")}
+            {cvT.languages}
           </h2>
           <div className="flex flex-wrap gap-2 text-sm">
             {data.languages.map((lang, idx) => (
@@ -324,7 +325,7 @@ const ModernTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) =>
       {data.certifications && data.certifications.length > 0 && (
         <section className="mb-6">
           <h2 className="text-lg font-semibold mb-3 uppercase tracking-wider" style={{ color: colors.primary }}>
-            {t("Certifications", "الشهادات")}
+            {cvT.certifications}
           </h2>
           <ul className={cn("list-disc space-y-1 text-sm", isAr ? "mr-6" : "ml-6")}>
             {data.certifications.map((cert, idx) => (
@@ -336,8 +337,8 @@ const ModernTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) =>
 
       {(!data.fullName && !data.experience?.length && !data.education?.length) && (
         <div className="text-center py-12 text-zinc-400">
-          <p className="text-lg mb-2">{t("CV Preview", "معاينة السيرة الذاتية")}</p>
-          <p className="text-sm">{t("Start filling the form to see your CV preview here", "ابدأ بملء النموذج لرؤية معاينة سيرتك الذاتية هنا")}</p>
+          <p className="text-lg mb-2">{cvT.cvPreview}</p>
+          <p className="text-sm">{cvT.startFillingForm}</p>
         </div>
       )}
     </div>
@@ -347,8 +348,8 @@ const ModernTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) =>
 /**
  * Elegant Template - Sophisticated with subtle design
  */
-const ElegantTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) => {
-  const { t } = useLocale();
+const ElegantTemplate = ({ data, isAr, cvLanguage }: { data: CvDraftData; isAr: boolean; cvLanguage: CvLanguage }) => {
+  const cvT = getCvTranslations(cvLanguage);
   const template = getTemplate("elegant");
   const colors = template?.previewColors || { primary: "#1a237e", secondary: "#fafafa", accent: "#5c6bc0", text: "#263238" };
 
@@ -360,7 +361,7 @@ const ElegantTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) =
     >
       <header className="mb-6 pb-4 border-b" style={{ borderColor: colors.accent + "40" }}>
         <h1 className="text-3xl font-serif mb-2" style={{ color: colors.primary }}>
-          {data.fullName || t("Your Name", "اسمك")}
+          {data.fullName || cvT.yourName}
         </h1>
         {data.title && (
           <p className="text-base text-zinc-600 mb-2 italic">{data.title}</p>
@@ -380,7 +381,7 @@ const ElegantTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) =
       {data.summary && (
         <section className="mb-6">
           <h2 className="text-lg font-semibold mb-2 pb-1 border-b" style={{ color: colors.primary, borderColor: colors.accent + "40" }}>
-            {t("Summary", "الملخص")}
+            {cvT.summary}
           </h2>
           <p className="text-zinc-700 text-sm leading-relaxed mt-2">{data.summary}</p>
         </section>
@@ -389,18 +390,18 @@ const ElegantTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) =
       {data.experience && data.experience.length > 0 && (
         <section className="mb-6">
           <h2 className="text-lg font-semibold mb-3 pb-1 border-b" style={{ color: colors.primary, borderColor: colors.accent + "40" }}>
-            {t("Experience", "الخبرات")}
+            {cvT.professionalExperience}
           </h2>
           <div className="space-y-4">
             {data.experience.map((exp, idx) => (
               <div key={idx} className="mb-3">
                 <div className={cn("flex justify-between items-start mb-1", isAr ? "flex-row-reverse" : "")}>
                   <div className="flex-1">
-                    <h3 className="font-semibold text-base" style={{ color: colors.primary }}>{exp.role || t("Role", "الوظيفة")}</h3>
-                    <p className="text-sm text-zinc-600 italic">{exp.company || t("Company", "الشركة")}</p>
+                    <h3 className="font-semibold text-base" style={{ color: colors.primary }}>{exp.role || cvT.role}</h3>
+                    <p className="text-sm text-zinc-600 italic">{exp.company || cvT.company}</p>
                   </div>
                   <div className={cn("text-xs text-zinc-500 whitespace-nowrap", isAr ? "ml-3" : "mr-3")}>
-                    {exp.startDate || ""} {exp.endDate ? ` ${isAr ? "إلى" : "-"} ${exp.endDate}` : ` ${t("Present", "حتى الآن")}`}
+                    {exp.startDate ? formatDateRange(exp.startDate, exp.endDate, cvT.present) : ""}
                   </div>
                 </div>
                 {exp.description && (
@@ -415,17 +416,17 @@ const ElegantTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) =
       {data.education && data.education.length > 0 && (
         <section className="mb-6">
           <h2 className="text-lg font-semibold mb-3 pb-1 border-b" style={{ color: colors.primary, borderColor: colors.accent + "40" }}>
-            {t("Education", "التعليم")}
+            {cvT.education}
           </h2>
           <div className="space-y-3">
             {data.education.map((edu, idx) => (
               <div key={idx} className={cn("flex justify-between items-start", isAr ? "flex-row-reverse" : "")}>
                 <div className="flex-1">
-                  <h3 className="font-semibold text-sm" style={{ color: colors.primary }}>{edu.degree || t("Degree", "المؤهل")}</h3>
-                  <p className="text-xs text-zinc-600 italic">{edu.school || t("Institution", "المؤسسة")}</p>
+                  <h3 className="font-semibold text-sm" style={{ color: colors.primary }}>{edu.degree || cvT.degree}</h3>
+                  <p className="text-xs text-zinc-600 italic">{edu.school || cvT.institution}</p>
                 </div>
                 <div className={cn("text-xs text-zinc-500 whitespace-nowrap", isAr ? "ml-3" : "mr-3")}>
-                  {edu.startDate || ""} {edu.endDate ? ` ${isAr ? "إلى" : "-"} ${edu.endDate}` : ""}
+                  {edu.startDate ? (edu.endDate ? `${formatDateForDisplay(edu.startDate)} ${isAr ? "إلى" : "-"} ${formatDateForDisplay(edu.endDate)}` : formatDateForDisplay(edu.startDate)) : ""}
                 </div>
               </div>
             ))}
@@ -436,7 +437,7 @@ const ElegantTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) =
       {data.skills && data.skills.length > 0 && (
         <section className="mb-6">
           <h2 className="text-lg font-semibold mb-3 pb-1 border-b" style={{ color: colors.primary, borderColor: colors.accent + "40" }}>
-            {t("Skills", "المهارات")}
+            {cvT.skills}
           </h2>
           <div className="flex flex-wrap gap-2">
             {data.skills.map((skill, idx) => (
@@ -453,7 +454,7 @@ const ElegantTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) =
       {data.languages && data.languages.length > 0 && (
         <section className="mb-6">
           <h2 className="text-lg font-semibold mb-3 pb-1 border-b" style={{ color: colors.primary, borderColor: colors.accent + "40" }}>
-            {t("Languages", "اللغات")}
+            {cvT.languages}
           </h2>
           <div className="flex flex-wrap gap-2 text-sm">
             {data.languages.map((lang, idx) => (
@@ -471,7 +472,7 @@ const ElegantTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) =
       {data.certifications && data.certifications.length > 0 && (
         <section className="mb-6">
           <h2 className="text-lg font-semibold mb-3 pb-1 border-b" style={{ color: colors.primary, borderColor: colors.accent + "40" }}>
-            {t("Certifications", "الشهادات")}
+            {cvT.certifications}
           </h2>
           <ul className={cn("list-disc space-y-1 text-sm", isAr ? "mr-6" : "ml-6")}>
             {data.certifications.map((cert, idx) => (
@@ -483,8 +484,8 @@ const ElegantTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) =
 
       {(!data.fullName && !data.experience?.length && !data.education?.length) && (
         <div className="text-center py-12 text-zinc-400">
-          <p className="text-lg mb-2">{t("CV Preview", "معاينة السيرة الذاتية")}</p>
-          <p className="text-sm">{t("Start filling the form to see your CV preview here", "ابدأ بملء النموذج لرؤية معاينة سيرتك الذاتية هنا")}</p>
+          <p className="text-lg mb-2">{cvT.cvPreview}</p>
+          <p className="text-sm">{cvT.startFillingForm}</p>
         </div>
       )}
     </div>
@@ -494,8 +495,8 @@ const ElegantTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) =
 /**
  * Creative Template - Bold and eye-catching
  */
-const CreativeTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) => {
-  const { t } = useLocale();
+const CreativeTemplate = ({ data, isAr, cvLanguage }: { data: CvDraftData; isAr: boolean; cvLanguage: CvLanguage }) => {
+  const cvT = getCvTranslations(cvLanguage);
   const template = getTemplate("creative");
   const colors = template?.previewColors || { primary: "#6a1b9a", secondary: "#f3e5f5", accent: "#ab47bc", text: "#1a1a1a" };
 
@@ -506,7 +507,7 @@ const CreativeTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) 
     >
       <header className="mb-6 pb-4" style={{ borderBottom: `4px solid ${colors.primary}`, backgroundColor: colors.secondary, marginLeft: isAr ? "0" : "-1.5rem", marginRight: isAr ? "-1.5rem" : "0", padding: "1.5rem", paddingBottom: "1rem" }}>
         <h1 className="text-4xl font-bold mb-2" style={{ color: colors.primary }}>
-          {data.fullName || t("Your Name", "اسمك")}
+          {data.fullName || cvT.yourName}
         </h1>
         {data.title && (
           <p className="text-base text-zinc-700 mb-2 font-semibold">{data.title}</p>
@@ -526,7 +527,7 @@ const CreativeTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) 
       {data.summary && (
         <section className="mb-6">
           <h2 className="text-xl font-bold mb-2" style={{ color: colors.primary }}>
-            {t("Summary", "الملخص")}
+            {cvT.summary}
           </h2>
           <p className="text-zinc-700 leading-relaxed">{data.summary}</p>
         </section>
@@ -535,18 +536,18 @@ const CreativeTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) 
       {data.experience && data.experience.length > 0 && (
         <section className="mb-6">
           <h2 className="text-xl font-bold mb-3 pb-2" style={{ color: colors.primary, borderBottom: `3px solid ${colors.accent}` }}>
-            {t("Experience", "الخبرات")}
+            {cvT.professionalExperience}
           </h2>
           <div className="space-y-4">
             {data.experience.map((exp, idx) => (
               <div key={idx} className={cn("mb-4", isAr ? "pr-4" : "pl-4")} style={{ [isAr ? "borderRight" : "borderLeft"]: `4px solid ${colors.accent}` }}>
                 <div className={cn("flex justify-between items-start mb-1", isAr ? "flex-row-reverse" : "")}>
                   <div className="flex-1">
-                    <h3 className="font-bold text-lg" style={{ color: colors.primary }}>{exp.role || t("Role", "الوظيفة")}</h3>
-                    <p className="text-base text-zinc-700 font-semibold">{exp.company || t("Company", "الشركة")}</p>
+                    <h3 className="font-bold text-lg" style={{ color: colors.primary }}>{exp.role || cvT.role}</h3>
+                    <p className="text-base text-zinc-700 font-semibold">{exp.company || cvT.company}</p>
                   </div>
                   <div className={cn("text-sm text-zinc-600 whitespace-nowrap", isAr ? "ml-3" : "mr-3")}>
-                    {exp.startDate || ""} {exp.endDate ? ` ${isAr ? "إلى" : "-"} ${exp.endDate}` : ` ${t("Present", "حتى الآن")}`}
+                    {exp.startDate ? formatDateRange(exp.startDate, exp.endDate, cvT.present) : ""}
                   </div>
                 </div>
                 {exp.description && (
@@ -561,17 +562,17 @@ const CreativeTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) 
       {data.education && data.education.length > 0 && (
         <section className="mb-6">
           <h2 className="text-xl font-bold mb-3 pb-2" style={{ color: colors.primary, borderBottom: `3px solid ${colors.accent}` }}>
-            {t("Education", "التعليم")}
+            {cvT.education}
           </h2>
           <div className="space-y-3">
             {data.education.map((edu, idx) => (
               <div key={idx} className={cn("flex justify-between items-start", isAr ? "pr-4 flex-row-reverse" : "pl-4")} style={{ [isAr ? "borderRight" : "borderLeft"]: `4px solid ${colors.accent}` }}>
                 <div className="flex-1">
-                  <h3 className="font-bold text-base" style={{ color: colors.primary }}>{edu.degree || t("Degree", "المؤهل")}</h3>
-                  <p className="text-sm text-zinc-700 font-semibold">{edu.school || t("Institution", "المؤسسة")}</p>
+                  <h3 className="font-bold text-base" style={{ color: colors.primary }}>{edu.degree || cvT.degree}</h3>
+                  <p className="text-sm text-zinc-700 font-semibold">{edu.school || cvT.institution}</p>
                 </div>
                 <div className={cn("text-sm text-zinc-600 whitespace-nowrap", isAr ? "ml-3" : "mr-3")}>
-                  {edu.startDate || ""} {edu.endDate ? ` ${isAr ? "إلى" : "-"} ${edu.endDate}` : ""}
+                  {edu.startDate ? (edu.endDate ? `${formatDateForDisplay(edu.startDate)} ${isAr ? "إلى" : "-"} ${formatDateForDisplay(edu.endDate)}` : formatDateForDisplay(edu.startDate)) : ""}
                 </div>
               </div>
             ))}
@@ -582,7 +583,7 @@ const CreativeTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) 
       {data.skills && data.skills.length > 0 && (
         <section className="mb-6">
           <h2 className="text-xl font-bold mb-3 pb-2" style={{ color: colors.primary, borderBottom: `3px solid ${colors.accent}` }}>
-            {t("Skills", "المهارات")}
+            {cvT.skills}
           </h2>
           <div className="flex flex-wrap gap-2">
             {data.skills.map((skill, idx) => (
@@ -599,7 +600,7 @@ const CreativeTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) 
       {data.languages && data.languages.length > 0 && (
         <section className="mb-6">
           <h2 className="text-xl font-bold mb-3 pb-2" style={{ color: colors.primary, borderBottom: `3px solid ${colors.accent}` }}>
-            {t("Languages", "اللغات")}
+            {cvT.languages}
           </h2>
           <div className="flex flex-wrap gap-2">
             {data.languages.map((lang, idx) => (
@@ -617,7 +618,7 @@ const CreativeTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) 
       {data.certifications && data.certifications.length > 0 && (
         <section className="mb-6">
           <h2 className="text-xl font-bold mb-3 pb-2" style={{ color: colors.primary, borderBottom: `3px solid ${colors.accent}` }}>
-            {t("Certifications", "الشهادات")}
+            {cvT.certifications}
           </h2>
           <ul className={cn("list-disc space-y-1", isAr ? "mr-6" : "ml-6")}>
             {data.certifications.map((cert, idx) => (
@@ -629,8 +630,8 @@ const CreativeTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) 
 
       {(!data.fullName && !data.experience?.length && !data.education?.length) && (
         <div className="text-center py-12 text-zinc-400">
-          <p className="text-lg mb-2">{t("CV Preview", "معاينة السيرة الذاتية")}</p>
-          <p className="text-sm">{t("Start filling the form to see your CV preview here", "ابدأ بملء النموذج لرؤية معاينة سيرتك الذاتية هنا")}</p>
+          <p className="text-lg mb-2">{cvT.cvPreview}</p>
+          <p className="text-sm">{cvT.startFillingForm}</p>
         </div>
       )}
     </div>
@@ -640,8 +641,8 @@ const CreativeTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) 
 /**
  * Technical Template - Structured for technical roles
  */
-const TechnicalTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) => {
-  const { t } = useLocale();
+const TechnicalTemplate = ({ data, isAr, cvLanguage }: { data: CvDraftData; isAr: boolean; cvLanguage: CvLanguage }) => {
+  const cvT = getCvTranslations(cvLanguage);
   const template = getTemplate("technical");
   const colors = template?.previewColors || { primary: "#004d40", secondary: "#e0f2f1", accent: "#26a69a", text: "#263238" };
 
@@ -654,7 +655,7 @@ const TechnicalTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean })
         {/* Sidebar */}
         <div className="col-span-12 md:col-span-4 p-4 rounded" style={{ backgroundColor: colors.secondary }}>
           <h1 className="text-2xl font-bold mb-2" style={{ color: colors.primary }}>
-            {data.fullName || t("Your Name", "اسمك")}
+            {data.fullName || cvT.yourName}
           </h1>
           {data.title && (
             <p className="text-sm text-zinc-700 mb-4">{data.title}</p>
@@ -673,7 +674,7 @@ const TechnicalTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean })
           {data.skills && data.skills.length > 0 && (
             <section className="mb-4">
               <h2 className="text-sm font-bold mb-2 uppercase" style={{ color: colors.primary }}>
-                {t("Skills", "المهارات")}
+                {cvT.skills}
               </h2>
               <div className="space-y-1">
                 {data.skills.map((skill, idx) => (
@@ -688,7 +689,7 @@ const TechnicalTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean })
           {data.languages && data.languages.length > 0 && (
             <section className="mb-4">
               <h2 className="text-sm font-bold mb-2 uppercase" style={{ color: colors.primary }}>
-                {t("Languages", "اللغات")}
+                {cvT.languages}
               </h2>
               <div className="text-xs text-zinc-700">
                 {data.languages.join(isAr ? "، " : ", ")}
@@ -702,7 +703,7 @@ const TechnicalTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean })
           {data.summary && (
             <section className="mb-6">
               <h2 className="text-lg font-bold mb-2 pb-1 border-b-2" style={{ color: colors.primary, borderColor: colors.accent }}>
-                {t("Summary", "الملخص")}
+                {cvT.summary}
               </h2>
               <p className="text-zinc-700 text-sm leading-relaxed">{data.summary}</p>
             </section>
@@ -711,18 +712,18 @@ const TechnicalTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean })
           {data.experience && data.experience.length > 0 && (
             <section className="mb-6">
               <h2 className="text-lg font-bold mb-3 pb-1 border-b-2" style={{ color: colors.primary, borderColor: colors.accent }}>
-                {t("Experience", "الخبرات")}
+                {cvT.professionalExperience}
               </h2>
               <div className="space-y-4">
                 {data.experience.map((exp, idx) => (
                   <div key={idx} className="mb-3">
                     <div className={cn("flex justify-between items-start mb-1", isAr ? "flex-row-reverse" : "")}>
                       <div className="flex-1">
-                        <h3 className="font-bold text-base" style={{ color: colors.primary }}>{exp.role || t("Role", "الوظيفة")}</h3>
-                        <p className="text-sm text-zinc-700 font-semibold">{exp.company || t("Company", "الشركة")}</p>
+                        <h3 className="font-bold text-base" style={{ color: colors.primary }}>{exp.role || cvT.role}</h3>
+                        <p className="text-sm text-zinc-700 font-semibold">{exp.company || cvT.company}</p>
                       </div>
                       <div className={cn("text-xs text-zinc-600 whitespace-nowrap", isAr ? "ml-3" : "mr-3")}>
-                        {exp.startDate || ""} {exp.endDate ? ` ${isAr ? "إلى" : "-"} ${exp.endDate}` : ` ${t("Present", "حتى الآن")}`}
+                        {exp.startDate ? formatDateRange(exp.startDate, exp.endDate, cvT.present) : ""}
                       </div>
                     </div>
                     {exp.description && (
@@ -737,17 +738,17 @@ const TechnicalTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean })
           {data.education && data.education.length > 0 && (
             <section className="mb-6">
               <h2 className="text-lg font-bold mb-3 pb-1 border-b-2" style={{ color: colors.primary, borderColor: colors.accent }}>
-                {t("Education", "التعليم")}
+                {cvT.education}
               </h2>
               <div className="space-y-3">
                 {data.education.map((edu, idx) => (
                   <div key={idx} className={cn("flex justify-between items-start", isAr ? "flex-row-reverse" : "")}>
                     <div className="flex-1">
-                      <h3 className="font-bold text-sm" style={{ color: colors.primary }}>{edu.degree || t("Degree", "المؤهل")}</h3>
-                      <p className="text-xs text-zinc-700 font-semibold">{edu.school || t("Institution", "المؤسسة")}</p>
+                      <h3 className="font-bold text-sm" style={{ color: colors.primary }}>{edu.degree || cvT.degree}</h3>
+                      <p className="text-xs text-zinc-700 font-semibold">{edu.school || cvT.institution}</p>
                     </div>
                     <div className={cn("text-xs text-zinc-600 whitespace-nowrap", isAr ? "ml-3" : "mr-3")}>
-                      {edu.startDate || ""} {edu.endDate ? ` ${isAr ? "إلى" : "-"} ${edu.endDate}` : ""}
+                      {edu.startDate ? (edu.endDate ? `${formatDateForDisplay(edu.startDate)} ${isAr ? "إلى" : "-"} ${formatDateForDisplay(edu.endDate)}` : formatDateForDisplay(edu.startDate)) : ""}
                     </div>
                   </div>
                 ))}
@@ -758,7 +759,7 @@ const TechnicalTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean })
           {data.certifications && data.certifications.length > 0 && (
             <section className="mb-6">
               <h2 className="text-lg font-bold mb-3 pb-1 border-b-2" style={{ color: colors.primary, borderColor: colors.accent }}>
-                {t("Certifications", "الشهادات")}
+                {cvT.certifications}
               </h2>
               <ul className={cn("list-disc space-y-1 text-sm", isAr ? "mr-6" : "ml-6")}>
                 {data.certifications.map((cert, idx) => (
@@ -772,8 +773,8 @@ const TechnicalTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean })
 
       {(!data.fullName && !data.experience?.length && !data.education?.length) && (
         <div className="text-center py-12 text-zinc-400 col-span-12">
-          <p className="text-lg mb-2">{t("CV Preview", "معاينة السيرة الذاتية")}</p>
-          <p className="text-sm">{t("Start filling the form to see your CV preview here", "ابدأ بملء النموذج لرؤية معاينة سيرتك الذاتية هنا")}</p>
+          <p className="text-lg mb-2">{cvT.cvPreview}</p>
+          <p className="text-sm">{cvT.startFillingForm}</p>
         </div>
       )}
     </div>
@@ -783,8 +784,8 @@ const TechnicalTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean })
 /**
  * Minimalist Template - Clean and minimal
  */
-const MinimalistTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) => {
-  const { t } = useLocale();
+const MinimalistTemplate = ({ data, isAr, cvLanguage }: { data: CvDraftData; isAr: boolean; cvLanguage: CvLanguage }) => {
+  const cvT = getCvTranslations(cvLanguage);
   const template = getTemplate("minimalist");
   const colors = template?.previewColors || { primary: "#212121", secondary: "#ffffff", accent: "#757575", text: "#212121" };
 
@@ -795,7 +796,7 @@ const MinimalistTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }
     >
       <header className="mb-8 pb-6 border-b" style={{ borderColor: colors.accent + "30" }}>
         <h1 className="text-3xl font-light mb-1" style={{ color: colors.text, fontWeight: 300 }}>
-          {data.fullName || t("Your Name", "اسمك")}
+          {data.fullName || cvT.yourName}
         </h1>
         {data.title && (
           <p className="text-sm text-zinc-500 mt-1">{data.title}</p>
@@ -821,18 +822,18 @@ const MinimalistTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }
       {data.experience && data.experience.length > 0 && (
         <section className="mb-6">
           <h2 className="text-base font-light mb-3 uppercase tracking-widest text-zinc-400" style={{ fontSize: "0.75rem", letterSpacing: "0.2em" }}>
-            {t("Experience", "الخبرات")}
+            {cvT.professionalExperience}
           </h2>
           <div className="space-y-4">
             {data.experience.map((exp, idx) => (
               <div key={idx} className="mb-4">
                 <div className={cn("flex justify-between items-start mb-1", isAr ? "flex-row-reverse" : "")}>
                   <div className="flex-1">
-                    <h3 className="font-normal text-base text-zinc-900">{exp.role || t("Role", "الوظيفة")}</h3>
-                    <p className="text-sm text-zinc-500">{exp.company || t("Company", "الشركة")}</p>
+                    <h3 className="font-normal text-base text-zinc-900">{exp.role || cvT.role}</h3>
+                    <p className="text-sm text-zinc-500">{exp.company || cvT.company}</p>
                   </div>
                   <div className={cn("text-xs text-zinc-400 whitespace-nowrap", isAr ? "ml-3" : "mr-3")}>
-                    {exp.startDate || ""} {exp.endDate ? ` ${isAr ? "إلى" : "-"} ${exp.endDate}` : ` ${t("Present", "حتى الآن")}`}
+                    {exp.startDate ? formatDateRange(exp.startDate, exp.endDate, cvT.present) : ""}
                   </div>
                 </div>
                 {exp.description && (
@@ -847,17 +848,17 @@ const MinimalistTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }
       {data.education && data.education.length > 0 && (
         <section className="mb-6">
           <h2 className="text-base font-light mb-3 uppercase tracking-widest text-zinc-400" style={{ fontSize: "0.75rem", letterSpacing: "0.2em" }}>
-            {t("Education", "التعليم")}
+            {cvT.education}
           </h2>
           <div className="space-y-3">
             {data.education.map((edu, idx) => (
               <div key={idx} className={cn("flex justify-between items-start", isAr ? "flex-row-reverse" : "")}>
                 <div className="flex-1">
-                  <h3 className="font-normal text-sm text-zinc-900">{edu.degree || t("Degree", "المؤهل")}</h3>
-                  <p className="text-xs text-zinc-500">{edu.school || t("Institution", "المؤسسة")}</p>
+                  <h3 className="font-normal text-sm text-zinc-900">{edu.degree || cvT.degree}</h3>
+                  <p className="text-xs text-zinc-500">{edu.school || cvT.institution}</p>
                 </div>
                 <div className={cn("text-xs text-zinc-400 whitespace-nowrap", isAr ? "ml-3" : "mr-3")}>
-                  {edu.startDate || ""} {edu.endDate ? ` ${isAr ? "إلى" : "-"} ${edu.endDate}` : ""}
+                  {edu.startDate ? (edu.endDate ? `${formatDateForDisplay(edu.startDate)} ${isAr ? "إلى" : "-"} ${formatDateForDisplay(edu.endDate)}` : formatDateForDisplay(edu.startDate)) : ""}
                 </div>
               </div>
             ))}
@@ -868,7 +869,7 @@ const MinimalistTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }
       {data.skills && data.skills.length > 0 && (
         <section className="mb-6">
           <h2 className="text-base font-light mb-3 uppercase tracking-widest text-zinc-400" style={{ fontSize: "0.75rem", letterSpacing: "0.2em" }}>
-            {t("Skills", "المهارات")}
+            {cvT.skills}
           </h2>
           <div className="flex flex-wrap gap-1 text-xs text-zinc-600">
             {data.skills.map((skill, idx) => (
@@ -886,7 +887,7 @@ const MinimalistTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }
       {data.languages && data.languages.length > 0 && (
         <section className="mb-6">
           <h2 className="text-base font-light mb-3 uppercase tracking-widest text-zinc-400" style={{ fontSize: "0.75rem", letterSpacing: "0.2em" }}>
-            {t("Languages", "اللغات")}
+            {cvT.languages}
           </h2>
           <div className="text-xs text-zinc-600">
             {data.languages.join(isAr ? "، " : ", ")}
@@ -897,7 +898,7 @@ const MinimalistTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }
       {data.certifications && data.certifications.length > 0 && (
         <section className="mb-6">
           <h2 className="text-base font-light mb-3 uppercase tracking-widest text-zinc-400" style={{ fontSize: "0.75rem", letterSpacing: "0.2em" }}>
-            {t("Certifications", "الشهادات")}
+            {cvT.certifications}
           </h2>
           <div className="space-y-1 text-xs text-zinc-600">
             {data.certifications.map((cert, idx) => (
@@ -909,8 +910,8 @@ const MinimalistTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }
 
       {(!data.fullName && !data.experience?.length && !data.education?.length) && (
         <div className="text-center py-12 text-zinc-400">
-          <p className="text-lg mb-2">{t("CV Preview", "معاينة السيرة الذاتية")}</p>
-          <p className="text-sm">{t("Start filling the form to see your CV preview here", "ابدأ بملء النموذج لرؤية معاينة سيرتك الذاتية هنا")}</p>
+          <p className="text-lg mb-2">{cvT.cvPreview}</p>
+          <p className="text-sm">{cvT.startFillingForm}</p>
         </div>
       )}
     </div>
@@ -920,8 +921,8 @@ const MinimalistTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }
 /**
  * Colorful Template - Vibrant and colorful
  */
-const ColorfulTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) => {
-  const { t } = useLocale();
+const ColorfulTemplate = ({ data, isAr, cvLanguage }: { data: CvDraftData; isAr: boolean; cvLanguage: CvLanguage }) => {
+  const cvT = getCvTranslations(cvLanguage);
   const template = getTemplate("colorful");
   const colors = template?.previewColors || { primary: "#c62828", secondary: "#ffebee", accent: "#ef5350", text: "#212121" };
 
@@ -932,7 +933,7 @@ const ColorfulTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) 
     >
       <header className="mb-6 pb-4" style={{ borderBottom: `5px solid ${colors.primary}` }}>
         <h1 className="text-4xl font-black mb-2" style={{ color: colors.primary, fontWeight: 900 }}>
-          {data.fullName || t("Your Name", "اسمك")}
+          {data.fullName || cvT.yourName}
         </h1>
         {data.title && (
           <p className="text-base text-zinc-700 mb-2 font-bold">{data.title}</p>
@@ -952,7 +953,7 @@ const ColorfulTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) 
       {data.summary && (
         <section className="mb-6 p-4 rounded" style={{ backgroundColor: colors.secondary }}>
           <h2 className="text-xl font-black mb-2" style={{ color: colors.primary }}>
-            {t("Summary", "الملخص")}
+            {cvT.summary}
           </h2>
           <p className="text-zinc-700 leading-relaxed">{data.summary}</p>
         </section>
@@ -961,18 +962,18 @@ const ColorfulTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) 
       {data.experience && data.experience.length > 0 && (
         <section className="mb-6">
           <h2 className="text-2xl font-black mb-3 pb-2" style={{ color: colors.primary, borderBottom: `4px solid ${colors.accent}` }}>
-            {t("Experience", "الخبرات")}
+            {cvT.professionalExperience}
           </h2>
           <div className="space-y-4">
             {data.experience.map((exp, idx) => (
               <div key={idx} className="mb-4 p-3 rounded" style={{ backgroundColor: colors.secondary + "40" }}>
                 <div className={cn("flex justify-between items-start mb-1", isAr ? "flex-row-reverse" : "")}>
                   <div className="flex-1">
-                    <h3 className="font-black text-lg" style={{ color: colors.primary }}>{exp.role || t("Role", "الوظيفة")}</h3>
-                    <p className="text-base text-zinc-700 font-bold">{exp.company || t("Company", "الشركة")}</p>
+                    <h3 className="font-black text-lg" style={{ color: colors.primary }}>{exp.role || cvT.role}</h3>
+                    <p className="text-base text-zinc-700 font-bold">{exp.company || cvT.company}</p>
                   </div>
                   <div className={cn("text-sm text-zinc-600 whitespace-nowrap font-bold", isAr ? "ml-3" : "mr-3")}>
-                    {exp.startDate || ""} {exp.endDate ? ` ${isAr ? "إلى" : "-"} ${exp.endDate}` : ` ${t("Present", "حتى الآن")}`}
+                    {exp.startDate ? formatDateRange(exp.startDate, exp.endDate, cvT.present) : ""}
                   </div>
                 </div>
                 {exp.description && (
@@ -987,17 +988,17 @@ const ColorfulTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) 
       {data.education && data.education.length > 0 && (
         <section className="mb-6">
           <h2 className="text-2xl font-black mb-3 pb-2" style={{ color: colors.primary, borderBottom: `4px solid ${colors.accent}` }}>
-            {t("Education", "التعليم")}
+            {cvT.education}
           </h2>
           <div className="space-y-3">
             {data.education.map((edu, idx) => (
               <div key={idx} className={cn("flex justify-between items-start p-3 rounded", isAr ? "flex-row-reverse" : "")} style={{ backgroundColor: colors.secondary + "40" }}>
                 <div className="flex-1">
-                  <h3 className="font-black text-base" style={{ color: colors.primary }}>{edu.degree || t("Degree", "المؤهل")}</h3>
-                  <p className="text-sm text-zinc-700 font-bold">{edu.school || t("Institution", "المؤسسة")}</p>
+                  <h3 className="font-black text-base" style={{ color: colors.primary }}>{edu.degree || cvT.degree}</h3>
+                  <p className="text-sm text-zinc-700 font-bold">{edu.school || cvT.institution}</p>
                 </div>
                 <div className={cn("text-sm text-zinc-600 whitespace-nowrap font-bold", isAr ? "ml-3" : "mr-3")}>
-                  {edu.startDate || ""} {edu.endDate ? ` ${isAr ? "إلى" : "-"} ${edu.endDate}` : ""}
+                  {edu.startDate ? (edu.endDate ? `${formatDateForDisplay(edu.startDate)} ${isAr ? "إلى" : "-"} ${formatDateForDisplay(edu.endDate)}` : formatDateForDisplay(edu.startDate)) : ""}
                 </div>
               </div>
             ))}
@@ -1008,7 +1009,7 @@ const ColorfulTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) 
       {data.skills && data.skills.length > 0 && (
         <section className="mb-6">
           <h2 className="text-2xl font-black mb-3 pb-2" style={{ color: colors.primary, borderBottom: `4px solid ${colors.accent}` }}>
-            {t("Skills", "المهارات")}
+            {cvT.skills}
           </h2>
           <div className="flex flex-wrap gap-2">
             {data.skills.map((skill, idx) => (
@@ -1025,7 +1026,7 @@ const ColorfulTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) 
       {data.languages && data.languages.length > 0 && (
         <section className="mb-6">
           <h2 className="text-2xl font-black mb-3 pb-2" style={{ color: colors.primary, borderBottom: `4px solid ${colors.accent}` }}>
-            {t("Languages", "اللغات")}
+            {cvT.languages}
           </h2>
           <div className="flex flex-wrap gap-2">
             {data.languages.map((lang, idx) => (
@@ -1042,7 +1043,7 @@ const ColorfulTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) 
       {data.certifications && data.certifications.length > 0 && (
         <section className="mb-6">
           <h2 className="text-2xl font-black mb-3 pb-2" style={{ color: colors.primary, borderBottom: `4px solid ${colors.accent}` }}>
-            {t("Certifications", "الشهادات")}
+            {cvT.certifications}
           </h2>
           <ul className={cn("list-disc space-y-1", isAr ? "mr-6" : "ml-6")}>
             {data.certifications.map((cert, idx) => (
@@ -1054,8 +1055,8 @@ const ColorfulTemplate = ({ data, isAr }: { data: CvDraftData; isAr: boolean }) 
 
       {(!data.fullName && !data.experience?.length && !data.education?.length) && (
         <div className="text-center py-12 text-zinc-400">
-          <p className="text-lg mb-2">{t("CV Preview", "معاينة السيرة الذاتية")}</p>
-          <p className="text-sm">{t("Start filling the form to see your CV preview here", "ابدأ بملء النموذج لرؤية معاينة سيرتك الذاتية هنا")}</p>
+          <p className="text-lg mb-2">{cvT.cvPreview}</p>
+          <p className="text-sm">{cvT.startFillingForm}</p>
         </div>
       )}
     </div>
@@ -1076,23 +1077,23 @@ export function LiveCvPreview({ data, templateKey, cvLanguage, className = "" }:
 
     switch (template) {
       case "classic":
-        return <ClassicTemplate data={data} isAr={isCvAr} />;
+        return <ClassicTemplate data={data} isAr={isCvAr} cvLanguage={actualCvLanguage} />;
       case "modern":
-        return <ModernTemplate data={data} isAr={isCvAr} />;
+        return <ModernTemplate data={data} isAr={isCvAr} cvLanguage={actualCvLanguage} />;
       case "elegant":
-        return <ElegantTemplate data={data} isAr={isCvAr} />;
+        return <ElegantTemplate data={data} isAr={isCvAr} cvLanguage={actualCvLanguage} />;
       case "creative":
-        return <CreativeTemplate data={data} isAr={isCvAr} />;
+        return <CreativeTemplate data={data} isAr={isCvAr} cvLanguage={actualCvLanguage} />;
       case "technical":
-        return <TechnicalTemplate data={data} isAr={isCvAr} />;
+        return <TechnicalTemplate data={data} isAr={isCvAr} cvLanguage={actualCvLanguage} />;
       case "minimalist":
-        return <MinimalistTemplate data={data} isAr={isCvAr} />;
+        return <MinimalistTemplate data={data} isAr={isCvAr} cvLanguage={actualCvLanguage} />;
       case "colorful":
-        return <ColorfulTemplate data={data} isAr={isCvAr} />;
+        return <ColorfulTemplate data={data} isAr={isCvAr} cvLanguage={actualCvLanguage} />;
       default:
-        return <ClassicTemplate data={data} isAr={isCvAr} />;
+        return <ClassicTemplate data={data} isAr={isCvAr} cvLanguage={actualCvLanguage} />;
     }
-  }, [data, templateKey, isCvAr]);
+  }, [data, templateKey, isCvAr, actualCvLanguage]);
 
   return (
     <div className={`live-cv-preview ${className}`}>

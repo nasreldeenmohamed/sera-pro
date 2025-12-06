@@ -92,13 +92,11 @@ export default function ProfilePage() {
         setPlan(planData);
         setCvCount(cvs.length);
 
-        // Check and update subscription status
-        if (planData) {
-          await checkAndUpdateSubscriptionStatus(user.uid);
-          // Refetch plan after status update
-          const updatedPlan = await getUserPlan(user.uid);
-          setPlan(updatedPlan);
-        }
+        // Always check and update subscription status (validates expiration dates)
+        await checkAndUpdateSubscriptionStatus(user.uid);
+        // Refetch plan after status update to get latest expiration date
+        const updatedPlan = await getUserPlan(user.uid);
+        setPlan(updatedPlan);
       } catch (error) {
         console.error("[Profile] Failed to fetch user data:", error);
       } finally {

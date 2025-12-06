@@ -247,48 +247,120 @@ export async function checkAndUpdateSubscriptionStatus(userId: string): Promise<
   }
   
   // For paid plans, check expiration date
-  if (!subscription.expirationDate) {
+  // Check both expirationDate and validUntil, use the latest one
+  const expirationFields = [subscription.expirationDate, subscription.validUntil].filter(Boolean);
+  
+  if (expirationFields.length === 0) {
     // No expiration date for paid plan means it doesn't expire (active)
     return "active";
   }
 
   const now = new Date();
+  // Set time to end of day (23:59:59.999) for accurate comparison
+  // This ensures subscription is valid for the entire expiration day
+  const nowEndOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
   
-  // Convert Firestore Timestamp to JavaScript Date if needed
-  let expirationDate: Date;
-  if (subscription.expirationDate.toDate) {
-    // Firestore Timestamp
-    expirationDate = subscription.expirationDate.toDate();
-  } else if (subscription.expirationDate instanceof Date) {
-    expirationDate = subscription.expirationDate;
-  } else if (typeof subscription.expirationDate === "string") {
-    expirationDate = new Date(subscription.expirationDate);
-  } else if (subscription.expirationDate.seconds) {
-    // Firestore Timestamp format { seconds, nanoseconds }
-    expirationDate = new Date(subscription.expirationDate.seconds * 1000);
-  } else {
+  // Helper function to convert Firestore Timestamp to Date
+  const toDate = (timestamp: any): Date | null => {
+    if (!timestamp) return null;
+    
+    if (timestamp.toDate) {
+      // Firestore Timestamp
+      return timestamp.toDate();
+    } else if (timestamp instanceof Date) {
+      return timestamp;
+    } else if (typeof timestamp === "string") {
+      return new Date(timestamp);
+    } else if (timestamp.seconds) {
+      // Firestore Timestamp format { seconds, nanoseconds }
+      return new Date(timestamp.seconds * 1000);
+    }
+    return null;
+  };
+
+  // Convert all expiration dates and find the latest one
+  const expirationDates = expirationFields
+    .map(toDate)
+    .filter((date): date is Date => date !== null);
+  
+  if (expirationDates.length === 0) {
     // Fallback: assume it's valid (active)
     return "active";
   }
 
-  // Compare dates
-  const isExpired = now > expirationDate;
-  const newStatus = isExpired ? "expired" : "active";
+  // Use the latest expiration date (most recent)
+  const latestExpirationDate = new Date(Math.max(...expirationDates.map(d => d.getTime())));
+  
+  // Set expiration date to end of day for accurate comparison
+  const expirationEndOfDay = new Date(
+    latestExpirationDate.getFullYear(),
+    latestExpirationDate.getMonth(),
+    latestExpirationDate.getDate(),
+    23, 59, 59, 999
+  );
 
-  // Update Firestore if status changed
-  if (subscription.status !== newStatus) {
+  // Compare dates: subscription expires if current date (end of day) is after expiration date (end of day)
+  const isExpired = nowEndOfDay > expirationEndOfDay;
+  const newStatus = isExpired ? "expired" : "active";
+  
+  // Log for debugging
+  console.log(`[Subscription Status Check] User: ${userId}`, {
+    plan: subscription.plan,
+    currentStatus: subscription.status,
+    expirationDate: subscription.expirationDate ? toDate(subscription.expirationDate)?.toISOString() : null,
+    validUntil: subscription.validUntil ? toDate(subscription.validUntil)?.toISOString() : null,
+    latestExpirationDate: latestExpirationDate.toISOString(),
+    expirationEndOfDay: expirationEndOfDay.toISOString(),
+    now: now.toISOString(),
+    nowEndOfDay: nowEndOfDay.toISOString(),
+    isExpired,
+    newStatus,
+  });
+
+  // Update Firestore if status changed or if expired (need to downgrade to free)
+  if (subscription.status !== newStatus || isExpired) {
     const db = getFirestore(getFirebaseApp());
     const profileRef = doc(db, "userProfiles", userId);
     
-    await updateDoc(profileRef, {
-      "subscription.status": newStatus,
-      updatedAt: serverTimestamp(),
-    });
-    
-    console.log(`[Subscription] Updated status for user ${userId}: ${subscription.status} -> ${newStatus}`);
+    if (isExpired) {
+      // Downgrade expired subscription to free plan
+      // Preserve subscription history for audit trail
+      const previousPlan = subscription.plan;
+      const updateData: any = {
+        "subscription.plan": "free",
+        "subscription.status": "active", // Free plan is always active
+        "subscription.expirationDate": null, // Free plan never expires
+        "subscription.validUntil": null, // Free plan never expires
+        "subscription.renewalDate": null, // No renewal for free plan
+        "subscription.nextBillingDate": null, // No billing for free plan
+        "subscription.creditsRemaining": null, // No credits for free plan
+        updatedAt: serverTimestamp(),
+      };
+      
+      // Only clear payment-related fields, preserve history
+      // subscriptionHistory is preserved automatically (not in updateData)
+      
+      await updateDoc(profileRef, updateData);
+      
+      console.log(`[Subscription] ✅ Auto-downgraded expired ${previousPlan} subscription to free plan for user ${userId}`, {
+        previousPlan,
+        expirationDate: subscription.expirationDate ? toDate(subscription.expirationDate)?.toISOString() : null,
+        validUntil: subscription.validUntil ? toDate(subscription.validUntil)?.toISOString() : null,
+        expiredOn: latestExpirationDate.toISOString(),
+      });
+    } else {
+      // Just update status if not expired
+      await updateDoc(profileRef, {
+        "subscription.status": newStatus,
+        updatedAt: serverTimestamp(),
+      });
+      
+      console.log(`[Subscription] Updated status for user ${userId}: ${subscription.status} -> ${newStatus}`);
+    }
   }
 
-  return newStatus;
+  // Return "active" if expired (because we downgraded to free which is always active)
+  return isExpired ? "active" : newStatus;
 }
 
 export async function saveCvDraft(userId: string, payload: { fullName: string; summary: string }) {
@@ -468,11 +540,48 @@ export async function getUserPlan(userId: string): Promise<UserPlan | null> {
     };
   }
   
+  // Helper function to convert Firestore Timestamp to Date
+  const toDate = (timestamp: any): Date | null => {
+    if (!timestamp) return null;
+    if (timestamp.toDate) return timestamp.toDate();
+    if (timestamp instanceof Date) return timestamp;
+    if (typeof timestamp === "string") return new Date(timestamp);
+    if (timestamp.seconds) return new Date(timestamp.seconds * 1000);
+    return null;
+  };
+
+  // Get the latest expiration date from either expirationDate or validUntil
+  // This ensures we always show the most recent expiration date
+  const expirationDates = [subscription.expirationDate, subscription.validUntil]
+    .map(toDate)
+    .filter((date): date is Date => date !== null);
+  
+  let latestValidUntil = subscription.validUntil || subscription.expirationDate;
+  
+  if (expirationDates.length > 0) {
+    // Find the latest date
+    const latestDate = new Date(Math.max(...expirationDates.map(d => d.getTime())));
+    
+    // Return the original timestamp that corresponds to the latest date
+    // Prefer validUntil if it matches, otherwise use expirationDate
+    const validUntilDate = subscription.validUntil ? toDate(subscription.validUntil) : null;
+    const expirationDateDate = subscription.expirationDate ? toDate(subscription.expirationDate) : null;
+    
+    if (validUntilDate && validUntilDate.getTime() === latestDate.getTime()) {
+      latestValidUntil = subscription.validUntil;
+    } else if (expirationDateDate && expirationDateDate.getTime() === latestDate.getTime()) {
+      latestValidUntil = subscription.expirationDate;
+    } else {
+      // If dates don't match exactly, use the one that exists
+      latestValidUntil = subscription.validUntil || subscription.expirationDate;
+    }
+  }
+
   // Convert subscription to UserPlan format for backward compatibility
   return {
     planType: subscription.plan,
     creditsRemaining: subscription.creditsRemaining,
-    validUntil: subscription.validUntil,
+    validUntil: latestValidUntil, // Use the latest expiration date
     lastPurchaseDate: subscription.lastPaymentDate,
   };
 }
